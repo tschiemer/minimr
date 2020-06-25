@@ -4,6 +4,31 @@
 
 #include "minimr.h"
 
+void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes) {
+    hdr->transaction_id = (bytes[0] << 8) | bytes[1];
+    hdr->flags[0] = bytes[2];
+    hdr->flags[1] = bytes[3];
+    hdr->nquestions = (bytes[4] << 8) | bytes[5]; // nquestions
+    hdr->nanswers = (bytes[6] << 8) | bytes[7]; // nanswers
+    hdr->nauthrr = (bytes[8] << 8) | bytes[9]; // nauthrr
+    hdr->nextrarr = (bytes[10] << 8) | bytes[11]; // nextrarr
+}
+
+void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr) {
+    bytes[0] = (hdr->transaction_id >> 8) & 0xff;
+    bytes[1] = hdr->transaction_id & 0xff;
+    bytes[2] = hdr->flags[0];
+    bytes[3] = hdr->flags[1];
+    bytes[4] = (hdr->nquestions >> 8) & 0xff;
+    bytes[5] = hdr->nquestions & 0xff;
+    bytes[6] = (hdr->nanswers >> 8) & 0xff;
+    bytes[7] = hdr->nanswers & 0xff;
+    bytes[8] = (hdr->nauthrr >> 8) & 0xff;
+    bytes[9] = hdr->nauthrr & 0xff;
+    bytes[10] = (hdr->nextrarr >> 8) & 0xff;
+    bytes[11] = hdr->nextrarr & 0xff;
+}
+
 void minimr_dns_normalize_name(struct minimr_dns_rr * rr)
 {
     ASSERT( rr != NULL );

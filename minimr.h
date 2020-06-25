@@ -9,6 +9,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef ASSERT
 #define ASSERT(x)
 #endif
@@ -65,7 +69,6 @@
 #define MINIMR_DNS_HDR2_RCODE_YXRRSET   7   // RR set exists when it should not
 #define MINIMR_DNS_HDR2_RCODE_NXRRSET   8   // RR set that should exist does not
 #define MINIMR_DNS_HDR2_RCODE_NOTAUTH   9   // not authorizezd / server not authoritaive for zone
-
 
 
 struct minimr_dns_hdr {
@@ -171,7 +174,16 @@ enum minimr_dns_rr_fun_type {
     minimr_dns_rr_fun_type_get_additional_rrs
 };
 
-typedef int (*minimr_dns_rr_fun)( enum minimr_dns_rr_fun_type fun, ... );
+// forward declaration for minimr_dns_rr_fun
+struct minimr_dns_rr;
+
+/**
+ * minimr_dns_rr_fun( minimr_dns_rr_fun_type_is_uptodate, struct minimr_dns_rr * rr, struct minimr_dns_rr_stat * rstat, uint8_t * msg );
+ * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_answer_rrs, struct minimr_dns_rr * rr, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr)
+ * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_authority_rrs, .. ) // same as above
+ * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_additional_rrs, .. ) // same as above
+ */
+typedef int (*minimr_dns_rr_fun)(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr *rr, ...);
 
 struct minimr_dns_rr {
     uint16_t type;
@@ -199,10 +211,10 @@ struct minimr_dns_rr {
         uint8_t name[__namelen__];
 
 #define MINIMR_DNS_RR_TYPE_BODY_A() \
-        uint8_t ip[4];
+        uint8_t ipv4[4];
 
 #define MINIMR_DNS_RR_TYPE_BODY_AAAA() \
-        uint16_t ip[8];
+        uint16_t ipv6[8];
 
 #define MINIMR_DNS_RR_TYPE_BODY_PTR(__domainlen__) \
         uint8_t domain[__domainlen__];
@@ -252,44 +264,27 @@ struct minimr_dns_rr {
 #define MINIMR_DNS_RR_GET_TXT_FIELD(__rr_txt_ptr__) ( &(__rr_txt_ptr__)->name[(__rr_txt_ptr__)->name_length+1] )
 
 
-inline void minimr_dns_ntoh_hdr(struct minimr_dns_hdr * hdr, uint8_t * bytes)
-{
-    hdr->transaction_id = (bytes[0] << 8) | bytes[1];
-    hdr->flags[0] = bytes[2];
-    hdr->flags[1] = bytes[3];
-    hdr->nquestions = (bytes[4] << 8) | bytes[5]; // nquestions
-    hdr->nanswers = (bytes[6] << 8) | bytes[7]; // nanswers
-    hdr->nauthrr = (bytes[8] << 8) | bytes[9]; // nauthrr
-    hdr->nextrarr = (bytes[10] << 8) | bytes[11]; // nextrarr
-}
+void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes);
+void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr);
 
-inline void minimr_dns_hton_hdr(uint8_t * bytes, struct minimr_dns_hdr * hdr)
-{
-    bytes[0] = (hdr->transaction_id >> 8) & 0xff;
-    bytes[1] = hdr->transaction_id& 0xff;
-    bytes[2] = hdr->flags[0];
-    bytes[3] = hdr->flags[1];
-    bytes[4] = (hdr->nquestions >> 8) & 0xff;
-    bytes[5] = hdr->nquestions & 0xff;
-    bytes[6] = (hdr->nanswers >> 8) & 0xff;
-    bytes[7] = hdr->nanswers& 0xff;
-    bytes[8] = (hdr->nauthrr >> 8) & 0xff;
-    bytes[9] = hdr->nauthrr & 0xff;
-    bytes[10] = (hdr->nextrarr >> 8) & 0xff;
-    bytes[11] = hdr->nextrarr & 0xff;
-}
+void minimr_dns_normalize_name(struct minimr_dns_rr *rr);
+void minimr_dns_normalize_txt(uint8_t *txt);
 
-void minimr_dns_normalize_name(struct minimr_dns_rr * rr);
-void minimr_dns_normalize_txt(uint8_t * txt);
+uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
 
-uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat * stat, uint8_t * msg, uint16_t * pos, uint16_t msglen);
-uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat * stat, uint8_t * msg, uint16_t *pos, uint16_t msglen);
+uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
 
 uint8_t minimr_handle_msg(
-        uint8_t * msg, uint16_t msglen,
+        uint8_t *msg, uint16_t msglen,
         struct minimr_dns_query_stat stats[], uint16_t nqstats,
-        struct minimr_dns_rr ** records, uint16_t nrecords,
-        uint8_t *outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen
+        struct minimr_dns_rr **records, uint16_t nrecords,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
 );
+
+#ifdef __cplusplus
+}
+#endif
+
+
 
 #endif //MINIMR_DNS_MINIMR_DNS_H
