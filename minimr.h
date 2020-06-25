@@ -13,6 +13,14 @@
 #define ASSERT(x)
 #endif
 
+#ifndef MINIMR_DNS_TXT_MARKER1
+#define MINIMR_DNS_TXT_MARKER1 '/'
+#endif
+
+#ifndef MINIMR_DNS_TXT_MARKER2
+#define MINIMR_DNS_TXT_MARKER2 '/'
+#endif
+
 #define MINIMR_IGNORE           0xff
 #define MINIMR_CONFIG_ERROR     0xfe
 #define MINIMR_BUFFER_OVERFLOW  0xfd
@@ -239,16 +247,9 @@ struct minimr_dns_rr {
     MINIMR_DNS_RR_TYPE_BODY_TXT(__txtlen__) \
     MINIMR_DNS_RR_TYPE_END()
 
-//#define MINIMR_DNS_RR_INIT(__name__, __type__, __cache_class__, __ttl__, __user_data__, __fun__) \
-//    { \
-//        .type = __type__, \
-//        .cache_class = __cache_class__, \
-//        .ttl = __ttl__, \
-//        .name_length = sizeof(__name__) - 1, \
-//        .use_data = __user_data__, \
-//        .fun = __fun__, \
-//        .name = __name__ \
-//    }
+
+// NOTE: this makes assumptions about the position of the txt field in memory
+#define MINIMR_DNS_RR_GET_TXT_FIELD(__rr_txt_ptr__) ( &(__rr_txt_ptr__)->name[(__rr_txt_ptr__)->name_length+1] )
 
 
 inline void minimr_dns_ntoh_hdr(struct minimr_dns_hdr * hdr, uint8_t * bytes)
@@ -279,6 +280,7 @@ inline void minimr_dns_hton_hdr(uint8_t * bytes, struct minimr_dns_hdr * hdr)
 }
 
 void minimr_dns_normalize_name(struct minimr_dns_rr * rr);
+void minimr_dns_normalize_txt(uint8_t * txt);
 
 uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat * stat, uint8_t * msg, uint16_t * pos, uint16_t msglen);
 uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat * stat, uint8_t * msg, uint16_t *pos, uint16_t msglen);

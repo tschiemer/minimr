@@ -15,6 +15,38 @@ void minimr_dns_normalize_name(struct minimr_dns_rr * rr)
     }
 }
 
+void minimr_dns_normalize_txt(uint8_t * txt)
+{
+    ASSERT(txt != NULL);
+
+    // this is not 100% safe, but it should only break if you configure something wrong
+
+    for(uint16_t i = 0; txt[i] != '\0'; i++){
+
+        // each txt part MUST begin with MINIMR_DNS_TXT_MARKER1/2
+        ASSERT(txt[i] == MINIMR_DNS_TXT_MARKER1);
+        ASSERT(txt[i+1] == MINIMR_DNS_TXT_MARKER2);
+
+        // start with offset
+        uint16_t l = 2;
+
+        for(; txt[i+l] != '\0' && txt[i+l] != MINIMR_DNS_TXT_MARKER1 && txt[i+l+1] != MINIMR_DNS_TXT_MARKER2; l++){
+            // just looking for end of part
+        }
+
+        // subtract original offset
+        l -= 2;
+
+        ASSERT(l > 0);
+
+        // replace text markers with part size
+        txt[i] = (l >> 8) & 0xff;
+        txt[i+1] = l & 0xff;
+
+        i += l;
+    }
+}
+
 uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat * stat, uint8_t * msg, uint16_t * pos, uint16_t msglen)
 {
     uint16_t p = *pos;
