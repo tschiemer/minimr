@@ -1,6 +1,8 @@
 #include "minimr.h"
 
 #include <iostream>
+#include <unistd.h>
+#include <cassert>
 
 
 using namespace std;
@@ -157,15 +159,25 @@ int fun_custom(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...)
 /* other functions */
 
 uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen){
-    // TODO
-    return 0;
+
+    assert(payload != NULL);
+    assert(maxlen > 0);
+
+    size_t r = read(STDIN_FILENO, payload, maxlen);
+
+    printf("read %lu bytes\n", r);
+    fflush(stdout);
+
+    return r;
 }
 
 void send_udp_packet(uint8_t * payload, uint16_t len){
-
+    write(STDOUT_FILENO, payload, len);
 }
 
 int main() {
+
+
 
     for (int i = 0; i < NRECORDS; i++){
         minimr_dns_normalize_name(records[i]);
@@ -179,7 +191,7 @@ int main() {
     struct minimr_dns_query_stat qstats[NQSTATS];
 
 
-    while(1){
+    while(!feof(stdin)){
 
         uint8_t in[2048];
         uint16_t inlen = 0;
