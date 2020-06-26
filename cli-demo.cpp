@@ -30,6 +30,8 @@ using namespace std;
 #define RR_SRV_TARGET RR_A_NAME
 
 #define RR_TXT_NAME RR_A_NAME
+// when using minimr_dns_normalize_txt() all key/value pairs must be preceeded by the two characters defined by MINIMR_DNS_TXT_MARKER1 and MINIMR_DNS_TXT_MARKER2
+// default both are set to the dot character ('.'),  override as needed
 #define RR_TXT_DATA "..key1=value1..key2=value2..key3=value3"
 
 #define RR_CUSTOM_PTR_NAME "._echo._"
