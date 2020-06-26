@@ -1,0 +1,4 @@
+
+socat -v udp4-recvfrom:6666,ip-add-membership=224.1.0.1:192.168.2.142,fork exec:minimr-cli-demo
+
+socat -x -d udp4-datagram:224.1.0.1:6666,range=192.168.2.142/24 -

@@ -9,12 +9,18 @@
 
 #include <stdint.h>
 
+#include "minimropt.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #ifndef ASSERT
 #define ASSERT(x)
+#endif
+
+#ifndef DEBUGF
+#define DEBUGF(fmt,...)
 #endif
 
 #ifndef MINIMR_DNS_TXT_MARKER1
@@ -228,6 +234,7 @@ struct minimr_dns_rr {
 
 
 #define MINIMR_DNS_RR_TYPE_BODY_TXT(__txtlen__) \
+        uint16_t txt_length; \
         uint8_t txt[__txtlen__];
 
 
@@ -261,7 +268,10 @@ struct minimr_dns_rr {
 
 
 // NOTE: this makes assumptions about the position of the txt field in memory
-#define MINIMR_DNS_RR_GET_TXT_FIELD(__rr_txt_ptr__) ( &(__rr_txt_ptr__)->name[(__rr_txt_ptr__)->name_length+1] )
+#define MINIMR_DNS_RR_GET_A_FIELD(__rr_a_ptr__) ( &(__rr_a_ptr__)->name[(__rr_a_ptr__)->name_length] )
+
+// NOTE: this makes assumptions about the position of the txt field in memory
+#define MINIMR_DNS_RR_GET_TXT_FIELD(__rr_txt_ptr__) ( &(__rr_txt_ptr__)->name[(__rr_txt_ptr__)->name_length+2] )
 
 
 void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes);
