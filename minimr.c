@@ -208,7 +208,8 @@ uint8_t minimr_handle_msg(
         uint8_t * msg, uint16_t msglen,
         struct minimr_dns_query_stat qstats[], uint16_t nqstats,
         struct minimr_dns_rr ** records, uint16_t nrecords,
-        uint8_t *outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen
+        uint8_t *outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen,
+        uint8_t *unicast_requested
 )
 {
     MINIMR_ASSERT(msg != NULL);
@@ -278,7 +279,7 @@ uint8_t minimr_handle_msg(
 
 //            MINIMR_DEBUGF("check types %d == %d\n", qstats[nq].type, records[ir]->type);
 
-            if (qstats[nq].type != records[ir]->type) continue;
+            if (qstats[nq].type != MINIMR_DNS_TYPE_ANY && qstats[nq].type != records[ir]->type) continue;
 
 //            MINIMR_DEBUGF("check class %d ANY or == %d\n", (qstats[nq].unicast_class & MINIMR_DNS_QCLASS), (records[ir]->cache_class & MINIMR_DNS_RRCLASS));
 
@@ -328,6 +329,9 @@ uint8_t minimr_handle_msg(
     if (nq == 0){
         return MINIMR_IGNORE;
     }
+
+    // init to false;
+    uint8_t unicast_req = 0;
 
     MINIMR_DEBUGF("checking known answers\n");
 
@@ -390,6 +394,8 @@ uint8_t minimr_handle_msg(
                 if (rr->fun(minimr_dns_rr_fun_type_is_uptodate, rr, &rstat, msg) == MINIMR_UPTODATE){
                     qstats[iq].relevant = 0;
                     remaining_nq--;
+                } else if ((qstats[iq].unicast_class & MINIMR_DNS_UNICAST) == MINIMR_DNS_UNICAST) {
+                    unicast_req = 1;
                 }
 
                 break;
@@ -414,6 +420,11 @@ uint8_t minimr_handle_msg(
     // sanity check config
     if (outmsgmaxlen <= MINIMR_DNS_HDR_SIZE){
         return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+    }
+
+    MINIMR_DEBUGF("unicast requested %d\n", unicast_req);
+    if (unicast_requested != NULL){
+        *unicast_requested = unicast_req;
     }
 
 
@@ -499,7 +510,7 @@ uint8_t minimr_handle_msg(
 
 
     // finalize header
-    outhdr.transaction_id = hdr.transaction_id; // likely to be 0x0000 ....
+    outhdr.transaction_id = hdr.transaction_id; // is generally ignored (ie 0x0000) but included for legacy support..
 
     outhdr.flags[0] = MINIMR_DNS_HDR1_QR_REPLY | MINIMR_DNS_HDR1_AA;
     outhdr.flags[1] = MINIMR_DNS_HDR2_RCODE_NOERROR;

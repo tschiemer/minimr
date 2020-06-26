@@ -430,7 +430,9 @@ int main() {
         uint8_t out[2048];
         uint16_t outlen = 0;
 
-        uint8_t res = minimr_handle_msg(in, inlen, qstats, NQSTATS, records, NRECORDS, out, &outlen, sizeof(out));
+        uint8_t unicast_requested;
+
+        uint8_t res = minimr_handle_msg(in, inlen, qstats, NQSTATS, records, NRECORDS, out, &outlen, sizeof(out), &unicast_requested);
 
         if (res == MINIMR_IGNORE){
             // it's not a message we should bother about

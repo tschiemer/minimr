@@ -99,11 +99,12 @@ extern "C" {
 #define MINIMR_DNS_HDR1_QR_QUERY        0x00
 #define MINIMR_DNS_HDR1_QR_REPLY        0x80
 
+// Multicast DNS shall set the OPCODE field to 0
 #define MINIMR_DNS_HDR1_OPCODE_QUERY    0x00    // standard query (0)
 //#define MINIMR_DNS_HDR1_OPCODE_IQUERY   0x08    // inverse query (1)
 //#define MINIMR_DNS_HDR1_OPCODE_STATUS   0x10    // server status request (2)
-#define MINIMR_DNS_HDR1_OPCODE_NOTIFY   0x20    // notify (4)
-#define MINIMR_DNS_HDR1_OPCODE_UPDATE   0x28    // update (5)
+//#define MINIMR_DNS_HDR1_OPCODE_NOTIFY   0x20    // notify (4)
+//#define MINIMR_DNS_HDR1_OPCODE_UPDATE   0x28    // update (5)
 //#define MINIMR_DNS_HDR1_OPCODE_DSO      0x30    // DNS Stateful operations (6)
 
 #define MINIMR_DNS_HDR2_RCODE_NOERROR   0   // ok (0)
@@ -137,6 +138,8 @@ struct minimr_dns_hdr {
 //#define MINIMR_DNS_CLASS_HS        0x0004
 //#define MINIMR_DNS_CLASS_NONE      0x00fe
 #define MINIMR_DNS_CLASS_ANY       0x00ff
+
+#define MINIMR_DNS_TYPE_ANY         255 // wildcard
 
 #define MINIMR_DNS_TYPE_A           1   // ipv4 addr
 #define MINIMR_DNS_TYPE_AAAA        28  // ipv6 addr
@@ -448,7 +451,8 @@ uint8_t minimr_handle_msg(
     uint8_t *msg, uint16_t msglen,
     struct minimr_dns_query_stat stats[], uint16_t nqstats,
     struct minimr_dns_rr **records, uint16_t nrecords,
-    uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
+    uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+    uint8_t *unicast_requested
 );
 
 uint8_t minimr_announce(
