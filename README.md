@@ -1,11 +1,23 @@
 # minimr
 mini mDNS Responder (framework)
 
-The goal of `mimimr` is to provide a generic mDNS query handler and response generator framework.
+The goal of `minimr` is to provide a generic mDNS query handler and response generator framework.
 
-`mimimr` does not provide networking or memory management capabilities which ultimately must be implemented by you.
+`minimr` does NOT provide networking or memory management capabilities which ultimately must be implemented by you. Which also means that there is not functionality to register or unregister services.
+
+`minimr` provides rather low-level datastructures that can be used - and can easily be customized. If you only require a fixed and small set of services - which is a likely use case `minimr` was intended for: great!
+If you want a complete (and *elaborate*) implementation you're recommended to have a look at AHAVI or Apple's implementations (see below).
 
 See [minimr-cli-demo](#minimr-cli-demo) to see an example implementation of how to use the framework.
+
+
+## Other implementations
+
+- [AVAHI](https://www.avahi.org/)
+- [Apple Bonjour](https://developer.apple.com/bonjour/)
+- [lwIP](http://www.nongnu.org/lwip/2_0_x/group__mdns.html): on top of stack
+- [mbed's nanostack](https://github.com/ARMmbed/mbed-os/blob/master/features/nanostack/sal-stack-nanostack/nanostack/ns_mdns_api.h): on top of stack??
+
 
 ## Todos
 
@@ -198,15 +210,12 @@ uint8_t minimr_terminate(
 >   cooperating responders one second to send out their own response to
 >   "rescue" the records before they expire and are deleted.
 
-### Unicast responses
-
-`minimr` generally ignores the unicast response requested bit - well, it does not deal with any networking
-
 ### Name Compression
 
 `minimr` does not force you to use [name compression](https://tools.ietf.org/html/rfc6762#section-18.14) and does not automatically compress data provided by you.
 
-If you want to use name compression in responses, please implement this yourself.
+If you want to use name compression in responses, please implement this yourself - record callbacks/handlers essentially are provided with complete messages when writing responses, if they can remember which names were used where, this should be a piece of cake ;) (more or less).
+
 
 ## MIT License
 
@@ -214,5 +223,5 @@ Also see `LICENSE` file.
 
 ## References
 
-- [RFC6762](https://tools.ietf.org/html/rfc6762)
+- [RFC6762: Multicast DNS](https://tools.ietf.org/html/rfc6762)
 - [IANA Domain Name System (DNS) Parameters](https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml)
