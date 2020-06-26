@@ -9,6 +9,8 @@ using namespace std;
 
 /***** basic config *****/
 
+// limits the number of questions we can actually answer
+// likely this can be identical to your number of RRs
 #define NQSTATS 10
 
 // note: actual names parts MUST be preceeded by a dot character ('.') - at least when you make use of the  minimr_dns_normalize_name() function as below
@@ -30,9 +32,10 @@ using namespace std;
 #define RR_SRV_TARGET RR_A_NAME
 
 #define RR_TXT_NAME RR_A_NAME
-// when using minimr_dns_normalize_txt() all key/value pairs must be preceeded by the two characters defined by MINIMR_DNS_TXT_MARKER1 and MINIMR_DNS_TXT_MARKER2
-// default both are set to the dot character ('.'),  override as needed
-#define RR_TXT_DATA "..key1=value1..key2=value2..key3=value3"
+// when using minimr_dns_normalize_field() all key/value pairs must be preceeded by one character to be defined by you
+// MUST NOT be the NUL character '\0' which is used to detect the end of the data
+#define MY_TXT_MARKER '.'
+#define RR_TXT_DATA ".key1=value1.key2=value2.key3=value3"
 
 #define RR_CUSTOM_PTR_NAME "._echo._"
 #define RR_CUSTOM_PTR_DOMAIN RR_A_NAME
@@ -189,9 +192,9 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
 
         if ((rr->type == MINIMR_DNS_TYPE_A && outmsgmaxlen < MINIMR_DNS_RR_A_SIZE(rr)) ||
             (rr->type == MINIMR_DNS_TYPE_AAAA && outmsgmaxlen < MINIMR_DNS_RR_AAAA_SIZE(rr)) ||
-            (rr->type == MINIMR_DNS_TYPE_PTR && outmsgmaxlen < MINIMR_DNS_RR_PTR_SIZE(rr, *MINIMR_DNS_RR_GET_PTR_DOMAINLENGTH_FIELD(rr))) ||
-            (rr->type == MINIMR_DNS_TYPE_SRV && outmsgmaxlen < MINIMR_DNS_RR_SRV_SIZE(rr, *MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(rr))) ||
-            (rr->type == MINIMR_DNS_TYPE_TXT && outmsgmaxlen < MINIMR_DNS_RR_TXT_SIZE(rr, *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(rr)))) {
+            (rr->type == MINIMR_DNS_TYPE_PTR && outmsgmaxlen < MINIMR_DNS_RR_PTR_SIZE(rr, *MINIMR_DNS_RR_PTR_GET_DOMAINLEN_PTR(rr))) ||
+            (rr->type == MINIMR_DNS_TYPE_SRV && outmsgmaxlen < MINIMR_DNS_RR_SRV_SIZE(rr, *MINIMR_DNS_RR_SRV_GET_TARGETLEN_PTR(rr))) ||
+            (rr->type == MINIMR_DNS_TYPE_TXT && outmsgmaxlen < MINIMR_DNS_RR_TXT_SIZE(rr, *MINIMR_DNS_RR_TXT_GET_TXTLEN_PTR(rr)))) {
             return MINIMR_NOT_OK;
         }
 
@@ -203,19 +206,19 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
         MINIMR_DNS_RR_WRITE(rr, outmsg, l)
 
         if (rr->type == MINIMR_DNS_TYPE_A) {
-            MINIMR_DNS_RR_WRITE_A_BODY(rr, outmsg, l, MINIMR_DNS_RR_GET_A_IPv4_FIELD(rr))
+            MINIMR_DNS_RR_WRITE_A_BODY(rr, outmsg, l, MINIMR_DNS_RR_A_GET_IPv4_PTR(rr))
         }
         else if (rr->type == MINIMR_DNS_TYPE_AAAA) {
-            MINIMR_DNS_RR_WRITE_AAAA_BODY(rr, outmsg, l, MINIMR_DNS_RR_GET_AAAA_IPv6_FIELD(rr))
+            MINIMR_DNS_RR_WRITE_AAAA_BODY(rr, outmsg, l, MINIMR_DNS_RR_AAAA_GET_IPv6_PTR(rr))
         }
         else if (rr->type == MINIMR_DNS_TYPE_PTR) {
-            MINIMR_DNS_RR_WRITE_PTR_BODY(rr, outmsg, l, MINIMR_DNS_RR_GET_PTR_DOMAIN_FIELD(rr), *MINIMR_DNS_RR_GET_PTR_DOMAINLENGTH_FIELD(rr))
+            MINIMR_DNS_RR_WRITE_PTR_BODY(rr, outmsg, l, MINIMR_DNS_RR_PTR_GET_DOMAIN_PTR(rr), *MINIMR_DNS_RR_PTR_GET_DOMAINLEN_PTR(rr))
         }
         else if (rr->type == MINIMR_DNS_TYPE_SRV) {
-            MINIMR_DNS_RR_WRITE_SRV_BODY(rr, outmsg, l, *MINIMR_DNS_RR_GET_SRV_PRIORITY_FIELD(rr), *MINIMR_DNS_RR_GET_SRV_WEIGHT_FIELD(rr), *MINIMR_DNS_RR_GET_SRV_PORT_FIELD(rr), MINIMR_DNS_RR_GET_SRV_TARGET_FIELD(rr), *MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(rr))
+            MINIMR_DNS_RR_WRITE_SRV_BODY(rr, outmsg, l, *MINIMR_DNS_RR_SRV_GET_PRIORITY_PTR(rr), *MINIMR_DNS_RR_SRV_GET_WEIGHT_PTR(rr), *MINIMR_DNS_RR_SRV_GET_PORT_PTR(rr), MINIMR_DNS_RR_SRV_GET_TARGET_PTR(rr), *MINIMR_DNS_RR_SRV_GET_TARGETLEN_PTR(rr))
         }
         else if (rr->type == MINIMR_DNS_TYPE_TXT) {
-            MINIMR_DNS_RR_WRITE_TXT_BODY(rr, outmsg, l, MINIMR_DNS_RR_GET_TXT_TXT_FIELD(rr), *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(rr))
+            MINIMR_DNS_RR_WRITE_TXT_BODY(rr, outmsg, l, MINIMR_DNS_RR_TXT_GET_TXT_PTR(rr), *MINIMR_DNS_RR_TXT_GET_TXTLEN_PTR(rr))
         }
 
         *outmsglen = l;
@@ -257,28 +260,28 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
 
                 if ((extra->type == MINIMR_DNS_TYPE_A && outmsgmaxlen < MINIMR_DNS_RR_A_SIZE(rr)) ||
                     (extra->type == MINIMR_DNS_TYPE_AAAA && outmsgmaxlen < MINIMR_DNS_RR_AAAA_SIZE(rr)) ||
-                    (extra->type == MINIMR_DNS_TYPE_PTR && outmsgmaxlen < MINIMR_DNS_RR_PTR_SIZE(rr, *MINIMR_DNS_RR_GET_PTR_DOMAINLENGTH_FIELD(rr))) ||
-                    (extra->type == MINIMR_DNS_TYPE_SRV && outmsgmaxlen < MINIMR_DNS_RR_SRV_SIZE(rr, *MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(rr))) ||
-                    (extra->type == MINIMR_DNS_TYPE_TXT && outmsgmaxlen < MINIMR_DNS_RR_TXT_SIZE(rr, *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(rr)))) {
+                    (extra->type == MINIMR_DNS_TYPE_PTR && outmsgmaxlen < MINIMR_DNS_RR_PTR_SIZE(rr, *MINIMR_DNS_RR_PTR_GET_DOMAINLEN_PTR(rr))) ||
+                    (extra->type == MINIMR_DNS_TYPE_SRV && outmsgmaxlen < MINIMR_DNS_RR_SRV_SIZE(rr, *MINIMR_DNS_RR_SRV_GET_TARGETLEN_PTR(rr))) ||
+                    (extra->type == MINIMR_DNS_TYPE_TXT && outmsgmaxlen < MINIMR_DNS_RR_TXT_SIZE(rr, *MINIMR_DNS_RR_TXT_GET_TXTLEN_PTR(rr)))) {
                     return MINIMR_NOT_OK;
                 }
 
                 MINIMR_DNS_RR_WRITE(extra, outmsg, l)
 
                 if (extra->type == MINIMR_DNS_TYPE_A) {
-                    MINIMR_DNS_RR_WRITE_A_BODY(extra, outmsg, l, MINIMR_DNS_RR_GET_A_IPv4_FIELD(extra))
+                    MINIMR_DNS_RR_WRITE_A_BODY(extra, outmsg, l, MINIMR_DNS_RR_A_GET_IPv4_PTR(extra))
                 }
                 else if (extra->type == MINIMR_DNS_TYPE_AAAA) {
-                    MINIMR_DNS_RR_WRITE_AAAA_BODY(extra, outmsg, l, MINIMR_DNS_RR_GET_AAAA_IPv6_FIELD(extra))
+                    MINIMR_DNS_RR_WRITE_AAAA_BODY(extra, outmsg, l, MINIMR_DNS_RR_AAAA_GET_IPv6_PTR(extra))
                 }
                 else if (extra->type == MINIMR_DNS_TYPE_PTR) {
-                    MINIMR_DNS_RR_WRITE_PTR_BODY(extra, outmsg, l, MINIMR_DNS_RR_GET_PTR_DOMAIN_FIELD(extra), *MINIMR_DNS_RR_GET_PTR_DOMAINLENGTH_FIELD(extra))
+                    MINIMR_DNS_RR_WRITE_PTR_BODY(extra, outmsg, l, MINIMR_DNS_RR_PTR_GET_DOMAIN_PTR(extra), *MINIMR_DNS_RR_PTR_GET_DOMAINLEN_PTR(extra))
                 }
                 else if (extra->type == MINIMR_DNS_TYPE_SRV) {
-                    MINIMR_DNS_RR_WRITE_SRV_BODY(extra, outmsg, l, *MINIMR_DNS_RR_GET_SRV_PRIORITY_FIELD(extra), *MINIMR_DNS_RR_GET_SRV_WEIGHT_FIELD(extra), *MINIMR_DNS_RR_GET_SRV_PORT_FIELD(extra), MINIMR_DNS_RR_GET_SRV_TARGET_FIELD(extra), *MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(extra))
+                    MINIMR_DNS_RR_WRITE_SRV_BODY(extra, outmsg, l, *MINIMR_DNS_RR_SRV_GET_PRIORITY_PTR(extra), *MINIMR_DNS_RR_SRV_GET_WEIGHT_PTR(extra), *MINIMR_DNS_RR_SRV_GET_PORT_PTR(extra), MINIMR_DNS_RR_SRV_GET_TARGET_PTR(extra), *MINIMR_DNS_RR_SRV_GET_TARGETLEN_PTR(extra))
                 }
                 else if (extra->type == MINIMR_DNS_TYPE_TXT) {
-                    MINIMR_DNS_RR_WRITE_TXT_BODY(extra, outmsg, l, MINIMR_DNS_RR_GET_TXT_TXT_FIELD(extra), *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(extra))
+                    MINIMR_DNS_RR_WRITE_TXT_BODY(extra, outmsg, l, MINIMR_DNS_RR_TXT_GET_TXT_PTR(extra), *MINIMR_DNS_RR_TXT_GET_TXTLEN_PTR(extra))
                 }
 
                 *nrr += 1;
@@ -336,7 +339,7 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
         // shorthand for:
         // MINIMR_DNS_RR_WRITE(rr, outmsg, l)
-        // MINIMR_DNS_RR_WRITE_PTR_BODY(rr, outmsg, l, MINIMR_DNS_RR_GET_A_IPv4_FIELD(rr))
+        // MINIMR_DNS_RR_WRITE_PTR_BODY(rr, outmsg, l, MINIMR_DNS_RR_A_GET_IPv4_PTR(rr))
 
         MINIMR_DNS_RR_WRITE_PTR(rr, outmsg, l, custom_rr->domain, custom_rr->domain_length)
 
@@ -348,15 +351,15 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
     if (type == minimr_dns_rr_fun_type_get_additional_rrs) {
 
-        if (outmsgmaxlen < MINIMR_DNS_RR_A_SIZE(custom_rr->rr_a) + MINIMR_DNS_RR_AAAA_SIZE(custom_rr->rr_aaaa) + MINIMR_DNS_RR_TXT_SIZE(custom_rr->rr_txt, *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(custom_rr->rr_txt))){
+        if (outmsgmaxlen < MINIMR_DNS_RR_A_SIZE(custom_rr->rr_a) + MINIMR_DNS_RR_AAAA_SIZE(custom_rr->rr_aaaa) + MINIMR_DNS_RR_TXT_SIZE(custom_rr->rr_txt, *MINIMR_DNS_RR_TXT_GET_TXTLEN_PTR(custom_rr->rr_txt))){
             return MINIMR_NOT_OK;
         }
 
-        MINIMR_DNS_RR_WRITE_A(custom_rr->rr_a, outmsg, l, MINIMR_DNS_RR_GET_A_IPv4_FIELD(custom_rr->rr_a))
+        MINIMR_DNS_RR_WRITE_A(custom_rr->rr_a, outmsg, l, MINIMR_DNS_RR_A_GET_IPv4_PTR(custom_rr->rr_a))
 
-        MINIMR_DNS_RR_WRITE_AAAA(custom_rr->rr_a, outmsg, l, MINIMR_DNS_RR_GET_A_IPv4_FIELD(custom_rr->rr_a))
+        MINIMR_DNS_RR_WRITE_AAAA(custom_rr->rr_a, outmsg, l, MINIMR_DNS_RR_A_GET_IPv4_PTR(custom_rr->rr_a))
 
-        MINIMR_DNS_RR_WRITE_TXT(custom_rr->rr_txt, outmsg, l, MINIMR_DNS_RR_GET_TXT_TXT_FIELD(custom_rr->rr_txt), *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(custom_rr->rr_txt))
+        MINIMR_DNS_RR_WRITE_TXT(custom_rr->rr_txt, outmsg, l, MINIMR_DNS_RR_TXT_GET_TXT_PTR(custom_rr->rr_txt), *MINIMR_DNS_RR_TXT_GET_TXTLEN_PTR(custom_rr->rr_txt))
 
         *nrr += 3;
 
@@ -402,11 +405,11 @@ int main() {
         minimr_dns_normalize_name(records[i]->name, &records[i]->name_length);
 
         if (records[i]->type == MINIMR_DNS_TYPE_TXT){
-            // NOTE: MINIMR_DNS_RR_GET_TXT_FIELD makes assumptions about memory layout (when using predefined type)
-            minimr_dns_normalize_txt(MINIMR_DNS_RR_GET_TXT_TXT_FIELD(records[i]));
+            // NOTE: MINIMR_DNS_RR_TXT_GET_PTR makes assumptions about memory layout (when using predefined type)
+            minimr_dns_normalize_txt(MINIMR_DNS_RR_TXT_GET_TXT_PTR(records[i]), MINIMR_DNS_RR_TXT_GET_TXTLEN_PTR(records[i]), MY_TXT_MARKER);
         }
         if (records[i]->type == MINIMR_DNS_TYPE_SRV){
-            minimr_dns_normalize_name(MINIMR_DNS_RR_GET_SRV_TARGET_FIELD(records[i]), MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(records[i]));
+            minimr_dns_normalize_name(MINIMR_DNS_RR_SRV_GET_TARGET_PTR(records[i]), MINIMR_DNS_RR_SRV_GET_TARGETLEN_PTR(records[i]));
         }
     }
 

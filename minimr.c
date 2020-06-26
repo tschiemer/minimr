@@ -33,68 +33,35 @@ void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr) {
     MINIMR_DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
 }
 
-void minimr_dns_normalize_name(uint8_t * name, uint16_t * length)
+void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t marker)
 {
-    MINIMR_ASSERT(name != NULL);
+    MINIMR_ASSERT(field != NULL);
     MINIMR_ASSERT(length != NULL);
 
     uint16_t i = 0;
 
-    while(name[i] != '\0'){
+    while(field[i] != '\0'){
 
-//        MINIMR_DEBUGF("txt %d %c\n",i, rr->name[i]);
-
-        MINIMR_ASSERT(name[i] == '.');
+        MINIMR_ASSERT(field[i] == marker);
 
         uint16_t l = 1;
 
-        for(; name[i+l] != '\0' && name[i+l] != '.'; l++){
+        for(; field[i+l] != '\0' && field[i+l] != marker; l++){
             // just looking for boundary
         }
 
         MINIMR_ASSERT(l > 0);
 
-        name[i] = l - 1;
+        field[i] = l - 1;
 
         i += l;
     }
 
-    *length = i + 1;
-//    MINIMR_DEBUGF("%d\n", rr->name_length);
-}
-
-void minimr_dns_normalize_txt(uint8_t * txt)
-{
-    if (txt == NULL){
-        return;
-    }
-
-    // this is not 100% safe, but it should only break if you configure something wrong
-
-    for(uint16_t i = 0; txt[i] != '\0'; i++){
-
-//        MINIMR_DEBUGF("txt %d\n",i);
-
-        // each txt part MUST begin with MINIMR_DNS_TXT_MARKER1/2
-        MINIMR_ASSERT(txt[i] == MINIMR_DNS_TXT_MARKER1);
-        MINIMR_ASSERT(txt[i+1] == MINIMR_DNS_TXT_MARKER2);
-
-        // start with offset
-        uint16_t l = 2;
-
-        for(; txt[i+l] != '\0' && txt[i+l] != MINIMR_DNS_TXT_MARKER1 && txt[i+l+1] != MINIMR_DNS_TXT_MARKER2; l++){
-            // just looking for end of part
-        }
-
-        MINIMR_ASSERT(l > 0);
-
-        // replace text markers with part size
-        txt[i] = ((l-2) >> 8) & 0xff;
-        txt[i+1] = (l-2) & 0xff;
-
-        i += l;
+    if (length != NULL){
+        *length = i + 1;
     }
 }
+
 
 uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat * stat, uint8_t * msg, uint16_t * pos, uint16_t msglen)
 {
