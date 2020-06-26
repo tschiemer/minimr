@@ -5,11 +5,14 @@
 #ifndef MINIMR_MINIMROPT_H
 #define MINIMR_MINIMROPT_H
 
+// the standard int definitions (uint8_t etc) are required, define as you please
+#include <stdint.h>
+
 #include <stdio.h>
 #include <assert.h>
 
-#define ASSERT(x) assert(x)
+#define MINIMR_ASSERT(x) assert(x)
 
-#define DEBUGF(...) fprintf(stderr, __VA_ARGS__)
+#define MINIMR_DEBUGF(...) fprintf(stderr, __VA_ARGS__)
 
 #endif //MINIMR_MINIMROPT_H

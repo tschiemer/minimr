@@ -13,7 +13,7 @@ void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes) {
     hdr->nauthrr = (bytes[8] << 8) | bytes[9]; // nauthrr
     hdr->nextrarr = (bytes[10] << 8) | bytes[11]; // nextrarr
 
-    DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
+    MINIMR_DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
 }
 
 void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr) {
@@ -30,20 +30,22 @@ void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr) {
     bytes[10] = (hdr->nextrarr >> 8) & 0xff;
     bytes[11] = hdr->nextrarr & 0xff;
 
-    DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
+    MINIMR_DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
 }
 
 void minimr_dns_normalize_name(struct minimr_dns_rr * rr)
 {
-    ASSERT( rr != NULL );
+    if (rr == NULL){
+        return;
+    }
 
     uint16_t i = 0;
 
     while(rr->name[i] != '\0'){
 
-//        DEBUGF("txt %d %c\n",i, rr->name[i]);
+//        MINIMR_DEBUGF("txt %d %c\n",i, rr->name[i]);
 
-        ASSERT(rr->name[i] == '.');
+        MINIMR_ASSERT(rr->name[i] == '.');
 
         uint16_t l = 1;
 
@@ -51,7 +53,7 @@ void minimr_dns_normalize_name(struct minimr_dns_rr * rr)
             // just looking for boundary
         }
 
-        ASSERT(l > 0);
+        MINIMR_ASSERT(l > 0);
 
         rr->name[i] = l - 1;
 
@@ -59,22 +61,24 @@ void minimr_dns_normalize_name(struct minimr_dns_rr * rr)
     }
 
     rr->name_length = i + 1;
-//    DEBUGF("%d\n", rr->name_length);
+//    MINIMR_DEBUGF("%d\n", rr->name_length);
 }
 
 void minimr_dns_normalize_txt(uint8_t * txt)
 {
-    ASSERT(txt != NULL);
+    if (txt == NULL){
+        return;
+    }
 
     // this is not 100% safe, but it should only break if you configure something wrong
 
     for(uint16_t i = 0; txt[i] != '\0'; i++){
 
-//        DEBUGF("txt %d\n",i);
+//        MINIMR_DEBUGF("txt %d\n",i);
 
         // each txt part MUST begin with MINIMR_DNS_TXT_MARKER1/2
-        ASSERT(txt[i] == MINIMR_DNS_TXT_MARKER1);
-        ASSERT(txt[i+1] == MINIMR_DNS_TXT_MARKER2);
+        MINIMR_ASSERT(txt[i] == MINIMR_DNS_TXT_MARKER1);
+        MINIMR_ASSERT(txt[i+1] == MINIMR_DNS_TXT_MARKER2);
 
         // start with offset
         uint16_t l = 2;
@@ -83,7 +87,7 @@ void minimr_dns_normalize_txt(uint8_t * txt)
             // just looking for end of part
         }
 
-        ASSERT(l > 0);
+        MINIMR_ASSERT(l > 0);
 
         // replace text markers with part size
         txt[i] = ((l-2) >> 8) & 0xff;
@@ -135,7 +139,7 @@ uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat * stat, uint8
 
     *pos = p;
 
-    DEBUGF("qstat\n type %d unicast %d class %d name_offset %d name_len %d\n", stat->type, stat->unicast_class & MINIMR_DNS_UNICAST, stat->unicast_class & MINIMR_DNS_QCLASS, stat->name_offset, stat->name_length);
+    MINIMR_DEBUGF("qstat\n type %d unicast %d class %d name_offset %d name_len %d\n", stat->type, stat->unicast_class & MINIMR_DNS_UNICAST, stat->unicast_class & MINIMR_DNS_QCLASS, stat->name_offset, stat->name_length);
 
     return MINIMR_OK;
 }
@@ -241,18 +245,18 @@ uint8_t minimr_handle_msg(
         uint8_t *outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen
 )
 {
-    ASSERT(msg != NULL);
-    ASSERT(qstats != NULL);
-    ASSERT(nqstats > 0);
-    ASSERT(records != NULL);
-    ASSERT(nrecords > 0);
-    ASSERT(outmsg != NULL);
-    ASSERT(outmsglen != NULL);
-    ASSERT(outmsgmaxlen > MINIMR_DNS_HDR_SIZE);
+    MINIMR_ASSERT(msg != NULL);
+    MINIMR_ASSERT(qstats != NULL);
+    MINIMR_ASSERT(nqstats > 0);
+    MINIMR_ASSERT(records != NULL);
+    MINIMR_ASSERT(nrecords > 0);
+    MINIMR_ASSERT(outmsg != NULL);
+    MINIMR_ASSERT(outmsglen != NULL);
+    MINIMR_ASSERT(outmsgmaxlen > MINIMR_DNS_HDR_SIZE);
 
-    DEBUGF("\nnew msg %p (len %d)\n", msg, msglen);
+    MINIMR_DEBUGF("\nnew msg %p (len %d)\n", msg, msglen);
 
-    DEBUGF("msglen check\n");
+    MINIMR_DEBUGF("msglen check\n");
 
     // ignore messages that are not long enough to even have a complete header
     if (msglen < MINIMR_DNS_HDR_SIZE){
@@ -264,7 +268,7 @@ uint8_t minimr_handle_msg(
     // read header info
     minimr_dns_ntoh_hdr(&hdr, msg);
 
-    DEBUGF("is standard query?\n");
+    MINIMR_DEBUGF("is standard query?\n");
 
     // not a (standard) query? ignore
     // or no questions? nothing to do!
@@ -279,7 +283,7 @@ uint8_t minimr_handle_msg(
     uint16_t pos = MINIMR_DNS_HDR_SIZE;
     uint16_t nq = 0;
 
-    DEBUGF("checking %d questions\n", hdr.nquestions);
+    MINIMR_DEBUGF("checking %d questions\n", hdr.nquestions);
 
     // note all relevant questions for us
     // stored in stats as 0 - nq
@@ -297,26 +301,31 @@ uint8_t minimr_handle_msg(
             return MINIMR_DNS_HDR2_RCODE_FORMERR;
         }
 
-        DEBUGF("comparing question %d with %d records\n", iq,nrecords);
+        MINIMR_DEBUGF("comparing question %d with %d records\n", iq,nrecords);
 
         for(uint16_t ir = 0; ir < nrecords; ir++){
 
-//            DEBUGF("check types %d == %d\n", qstats[nq].type, records[ir]->type);
+            // don't check if record not given
+            if (records[ir] == NULL){
+                continue;
+            }
+
+//            MINIMR_DEBUGF("check types %d == %d\n", qstats[nq].type, records[ir]->type);
 
             if (qstats[nq].type != records[ir]->type) continue;
 
-//            DEBUGF("check class %d ANY or == %d\n", (qstats[nq].unicast_class & MINIMR_DNS_QCLASS), (records[ir]->cache_class & MINIMR_DNS_RRCLASS));
+//            MINIMR_DEBUGF("check class %d ANY or == %d\n", (qstats[nq].unicast_class & MINIMR_DNS_QCLASS), (records[ir]->cache_class & MINIMR_DNS_RRCLASS));
 
             // unless ANY class was asked for check if classes match
             if ((qstats[nq].unicast_class & MINIMR_DNS_QCLASS) != MINIMR_DNS_CLASS_ANY &&
                     (qstats[nq].unicast_class & MINIMR_DNS_QCLASS) != (records[ir]->cache_class & MINIMR_DNS_RRCLASS) ) continue;
 
-//            DEBUGF("check len %d == %d\n", qstats[nq].name_length, records[ir]->name_length);
+//            MINIMR_DEBUGF("check len %d == %d\n", qstats[nq].name_length, records[ir]->name_length);
 
             // if name lengths don't match, there's no point checking names
             if (qstats[nq].name_length != records[ir]->name_length) continue;
 
-//            DEBUGF("check name\n");
+//            MINIMR_DEBUGF("check name\n");
 
             // pretty much a reverse memcmp of the name
             uint8_t mismatch = 0;
@@ -326,7 +335,7 @@ uint8_t minimr_handle_msg(
                     mismatch = 1;
                 }
 
-//                DEBUGF("%02x %02x\n", qname[i], records[ir]->name[i]);
+//                MINIMR_DEBUGF("%02x %02x\n", qname[i], records[ir]->name[i]);
             }
 
             if (mismatch) continue;
@@ -340,21 +349,21 @@ uint8_t minimr_handle_msg(
 
             nq++;
 
-            DEBUGF("question %d matches record %d\n", iq, ir);
+            MINIMR_DEBUGF("question %d matches record %d\n", iq, ir);
 
             break;
         }
 
     }
 
-    DEBUGF("got %d relevant questions\n", nq);
+    MINIMR_DEBUGF("got %d relevant questions\n", nq);
 
     // no questions we need to answer
     if (nq == 0){
         return MINIMR_IGNORE;
     }
 
-    DEBUGF("checking known answers\n");
+    MINIMR_DEBUGF("checking known answers\n");
 
     // note how many questions we actually have to answer
     // (can change after checking the known answers)
@@ -428,7 +437,7 @@ uint8_t minimr_handle_msg(
         }
     }
 
-    DEBUGF("remaining questions %d\n", remaining_nq);
+    MINIMR_DEBUGF("remaining questions %d\n", remaining_nq);
 
     // oh, all our records are known already! time for a coffee
     if (remaining_nq == 0){
@@ -446,7 +455,7 @@ uint8_t minimr_handle_msg(
 
     uint16_t nanswers = 0;
 
-    DEBUGF("outlen %d\n", outlen);
+    MINIMR_DEBUGF("outlen %d\n", outlen);
 
     // add all normal answers RRs
     for(uint16_t iq = 0; iq < nq; iq++){
@@ -469,7 +478,7 @@ uint8_t minimr_handle_msg(
         nanswers += nrr;
     }
 
-    DEBUGF("outlen %d\n", outlen);
+    MINIMR_DEBUGF("outlen %d\n", outlen);
 
     // add all authority RRs
     uint16_t nauthrr = 0;
@@ -493,7 +502,7 @@ uint8_t minimr_handle_msg(
         nauthrr += nrr;
     }
 
-    DEBUGF("outlen %d\n", outlen);
+    MINIMR_DEBUGF("outlen %d\n", outlen);
 
     // add all additional RRs
     uint16_t nextrarr = 0;
@@ -517,7 +526,7 @@ uint8_t minimr_handle_msg(
         nextrarr += nrr;
     }
 
-    DEBUGF("outlen %d\n", outlen);
+    MINIMR_DEBUGF("outlen %d\n", outlen);
 
     // prepare outheader and out sanity check
     struct minimr_dns_hdr outhdr;

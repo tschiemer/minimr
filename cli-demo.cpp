@@ -11,11 +11,16 @@ using namespace std;
 
 #define NQSTATS 10
 
+// note: actual names parts MUST be preceeded by a dot character ('.') - at least when you make use of the  minimr_dns_normalize_name() function as below
+// otherwise you can encode the length of each following component, such as "\x0fWhere be Kittens\x05local"
+// also, the terminating NUL-character '\0' is necessary.
 
 #define RR_A_NAME ".Where be Kittens.local"
+// the predefined IPv4 type is an uint8_t[4]
 #define RR_A_IPv4 {127, 0, 0, 1}
 
 #define RR_AAAA_NAME ".asdfasdf.local"
+// the predefined IPv6 type is an uint16_t[8]
 #define RR_AAAA_IPv6 {1,2,3,4,5,6,7,8}
 
 #define RR_PTR_NAME "._echo._udp.local"
@@ -25,7 +30,7 @@ using namespace std;
 #define RR_SRV_TARGET RR_A_NAME
 
 #define RR_TXT_NAME RR_A_NAME
-#define RR_TXT_DATA "//key1=value1//key2=value2//key3=value3"
+#define RR_TXT_DATA "..key1=value1..key2=value2..key3=value3"
 
 #define RR_CUSTOM_PTR_NAME "._echo._"
 #define RR_CUSTOM_PTR_DOMAIN RR_A_NAME
@@ -48,75 +53,82 @@ Custom_PTR_RR;
 
 /***** function signatures *****/
 
-int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...);
-int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...);
+static int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...);
+static int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...);
 
 
 // dummy functions
-uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen);
-void send_udp_packet(uint8_t * payload, uint16_t len);
+static uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen);
+static void send_udp_packet(uint8_t * payload, uint16_t len);
 
 /***** local variables *****/
 
 /* RR config */
 
 
-MINIMR_DNS_RR_TYPE_A(sizeof(RR_A_NAME)) RR_A = {
+static MINIMR_DNS_RR_TYPE_A(sizeof(RR_A_NAME)) RR_A = {
     .type = MINIMR_DNS_TYPE_A,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 0xffffffff,
     .fun = generic_rr_handler,
     .name = RR_A_NAME,
+    // anything hereafter is not part of the basic struct minimr_dns_rr
     .ipv4 = RR_A_IPv4
 };
 
-MINIMR_DNS_RR_TYPE_AAAA(sizeof(RR_AAAA_NAME)) RR_AAAA = {
+static MINIMR_DNS_RR_TYPE_AAAA(sizeof(RR_AAAA_NAME)) RR_AAAA = {
     .type = MINIMR_DNS_TYPE_AAAA,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
     .fun = generic_rr_handler,
     .name = RR_AAAA_NAME,
+    // anything hereafter is not part of the basic struct minimr_dns_rr
     .ipv6 = RR_AAAA_IPv6
 };
 
-MINIMR_DNS_RR_TYPE_PTR(sizeof(RR_PTR_NAME), sizeof(RR_PTR_DOMAIN)) RR_PTR = {
+static MINIMR_DNS_RR_TYPE_PTR(sizeof(RR_PTR_NAME), sizeof(RR_PTR_DOMAIN)) RR_PTR = {
     .type = MINIMR_DNS_TYPE_PTR,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
     .fun = generic_rr_handler,
     .name = RR_PTR_NAME,
+    // anything hereafter is not part of the basic struct minimr_dns_rr
     .domain = RR_PTR_DOMAIN
 };
 
-MINIMR_DNS_RR_TYPE_SRV(sizeof(RR_SRV_NAME), sizeof(RR_SRV_TARGET)) RR_SRV = {
+static MINIMR_DNS_RR_TYPE_SRV(sizeof(RR_SRV_NAME), sizeof(RR_SRV_TARGET)) RR_SRV = {
     .type = MINIMR_DNS_TYPE_SRV,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
     .fun = generic_rr_handler,
     .name = RR_PTR_NAME,
+    // anything hereafter is not part of the basic struct minimr_dns_rr
     .priority = 1,
     .weight = 100,
     .port = 7,
     .target = RR_SRV_TARGET
 };
 
-MINIMR_DNS_RR_TYPE_TXT(sizeof(RR_TXT_NAME), sizeof(RR_TXT_DATA)) RR_TXT = {
+static MINIMR_DNS_RR_TYPE_TXT(sizeof(RR_TXT_NAME), sizeof(RR_TXT_DATA)) RR_TXT = {
     .type = MINIMR_DNS_TYPE_TXT,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
     .fun = generic_rr_handler,
     .name = RR_TXT_NAME,
+    // anything hereafter is not part of the basic struct minimr_dns_rr
     .txt_length = sizeof(RR_TXT_DATA),
     .txt = RR_TXT_DATA
 };
 
-Custom_PTR_RR RR_CUSTOM = {
+// isn't this much nicer?
+static Custom_PTR_RR RR_CUSTOM = {
     .type = MINIMR_DNS_TYPE_PTR,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
     .fun = custom_rr_handler,
     .name = RR_CUSTOM_PTR_NAME,
-    .domain_length = sizeof(RR_CUSTOM_PTR_NAME),
+    // anything hereafter is not part of the basic struct minimr_dns_rr
+    .domain_length = sizeof(RR_CUSTOM_PTR_NAME), // TODO automate for default case
     .domain = RR_CUSTOM_PTR_DOMAIN,
     .rr_a = (struct minimr_dns_rr *)&RR_A,
     .rr_srv = (struct minimr_dns_rr *)&RR_PTR,
@@ -124,17 +136,19 @@ Custom_PTR_RR RR_CUSTOM = {
 };
 
 
-// being naughty here
-struct minimr_dns_rr * records[] = {
+// container for records handed to minimr
+// can be static, dynamic, etc
+static  struct minimr_dns_rr * records[] = {
     (struct minimr_dns_rr *)&RR_A,
     (struct minimr_dns_rr *)&RR_AAAA,
     (struct minimr_dns_rr *)&RR_PTR,
     (struct minimr_dns_rr *)&RR_SRV,
     (struct minimr_dns_rr *)&RR_TXT,
+    NULL, // will be skipped (handy when you want to dynamically de-/activate records
     (struct minimr_dns_rr *)&RR_CUSTOM,
 };
 
-const uint16_t NRECORDS = sizeof(records) / sizeof(struct minimr_dns_rr *);
+static uint16_t NRECORDS = sizeof(records) / sizeof(struct minimr_dns_rr *);
 
 /***** functions *****/
 
@@ -149,7 +163,7 @@ const uint16_t NRECORDS = sizeof(records) / sizeof(struct minimr_dns_rr *);
 // thus a handler also knows best when to add additional
 int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...)
 {
-    ASSERT(type == minimr_dns_rr_fun_type_is_uptodate || type == minimr_dns_rr_fun_type_get_answer_rrs || type == minimr_dns_rr_fun_type_get_authority_rrs || type == minimr_dns_rr_fun_type_get_additional_rrs);
+    MINIMR_ASSERT(type == minimr_dns_rr_fun_type_is_uptodate || type == minimr_dns_rr_fun_type_get_answer_rrs || type == minimr_dns_rr_fun_type_get_authority_rrs || type == minimr_dns_rr_fun_type_get_additional_rrs);
 
 
     if (type == minimr_dns_rr_fun_type_is_uptodate){
@@ -163,7 +177,7 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
 
     uint8_t * outmsg = va_arg(args, uint8_t *);
     uint16_t * outmsglen = va_arg(args, uint16_t *);
-    uint16_t outmsgmaxlen = va_arg(args, uint16_t);
+    uint16_t outmsgmaxlen = va_arg(args, int); // uint16_t will be promoted to int
     uint16_t * nrr = va_arg(args, uint16_t *);
 
     va_end(args);
@@ -202,14 +216,14 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
         *outmsglen = l;
         *nrr = 1;
 
-        DEBUGF("added %d RRs (totlen %d)\n", 1, l);
+        MINIMR_DEBUGF("added %d RRs (totlen %d)\n", 1, l);
 
         return MINIMR_OK;
     }
 
     if (type == minimr_dns_rr_fun_type_get_authority_rrs){
 
-        DEBUGF("no authority RRs to add\n");
+        MINIMR_DEBUGF("no authority RRs to add\n");
 
         return MINIMR_OK;
     }
@@ -254,7 +268,7 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
                     MINIMR_DNS_RR_WRITE_TXT_BODY(extra, outmsg, l, MINIMR_DNS_RR_GET_TXT_TXT_FIELD(extra), *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(extra))
                 }
 
-                *nrr ++;
+                *nrr += 1;
             }
 
             *outmsglen = l;
@@ -270,10 +284,10 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
 
 int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...)
 {
-    ASSERT(type == minimr_dns_rr_fun_type_is_uptodate || type == minimr_dns_rr_fun_type_get_answer_rrs || type == minimr_dns_rr_fun_type_get_authority_rrs || type == minimr_dns_rr_fun_type_get_additional_rrs);
+    MINIMR_ASSERT(type == minimr_dns_rr_fun_type_is_uptodate || type == minimr_dns_rr_fun_type_get_answer_rrs || type == minimr_dns_rr_fun_type_get_authority_rrs || type == minimr_dns_rr_fun_type_get_additional_rrs);
 
     // as this handler has only been assigned to our custom RR this MUST be true
-    ASSERT( rr == (struct minimr_dns_rr *)&RR_CUSTOM );
+    MINIMR_ASSERT( rr == (struct minimr_dns_rr *)&RR_CUSTOM );
 
     Custom_PTR_RR * custom_rr = (Custom_PTR_RR*)rr;
 
@@ -292,7 +306,7 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
     uint8_t * outmsg = va_arg(args, uint8_t *);
     uint16_t * outmsglen = va_arg(args, uint16_t *);
-    uint16_t outmsgmaxlen = va_arg(args, uint16_t);
+    uint16_t outmsgmaxlen = va_arg(args, int); // uint16_t will be promoted to int
     uint16_t * nrr = va_arg(args, uint16_t *);
 
     va_end(args);
@@ -315,7 +329,7 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
         MINIMR_DNS_RR_WRITE_PTR(rr, outmsg, l, custom_rr->domain, custom_rr->domain_length)
 
-        DEBUGF("added %d RRs (totlen %d)\n", 1, l);
+        MINIMR_DEBUGF("added %d RRs (totlen %d)\n", 1, l);
 
         return MINIMR_OK;
     }
@@ -342,14 +356,10 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
 uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen){
 
-    assert(payload != NULL);
-    assert(maxlen > 0);
+    MINIMR_ASSERT(payload != NULL);
+    MINIMR_ASSERT(maxlen > 0);
 
     size_t r = fread(payload, sizeof(uint8_t), maxlen, stdin);
-
-//    if (r > 0){
-//        DEBUGF("read %lu bytes\n", r);
-//    }
 
     return r;
 }
@@ -368,12 +378,11 @@ void send_udp_packet(uint8_t * payload, uint16_t len){
 int main() {
 
 
-
     for (int i = 0; i < NRECORDS; i++){
         minimr_dns_normalize_name(records[i]);
 
         if (records[i]->type == MINIMR_DNS_TYPE_TXT){
-            
+
             // NOTE: MINIMR_DNS_RR_GET_TXT_FIELD makes assumptions about memory layout (when using predefined type)
             minimr_dns_normalize_txt(MINIMR_DNS_RR_GET_TXT_TXT_FIELD(records[i]));
         }
@@ -400,34 +409,33 @@ int main() {
 
         if (res == MINIMR_IGNORE){
             // it's not a message we should bother about
-            DEBUGF("MINIMR_IGNORE\n");
+            MINIMR_DEBUGF("MINIMR_IGNORE\n");
             continue;
         }
 
         if (res == MINIMR_DNS_HDR2_RCODE_FORMERR){
             // we could send a response to the querying device with this result code
             // don't do this if it was a multicast
-            DEBUGF("MINIMR_DNS_HDR2_RCODE_FORMERR\n");
+            MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_FORMERR\n");
             continue;
         }
 
         if (res == MINIMR_DNS_HDR2_RCODE_SERVAIL){
             // we could send a response to the querying device with this result code
             // don't do this if it was a multicast
-            DEBUGF("MINIMR_DNS_HDR2_RCODE_SERVAIL\n");
+            MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_SERVAIL\n");
             continue;
         }
 
         if (res != MINIMR_DNS_HDR2_RCODE_NOERROR){
             // just a last test for safety
-            DEBUGF("other error!\n");
+            MINIMR_DEBUGF("other error!\n");
             continue;
         }
 
-        DEBUGF("MINIMR_DNS_HDR2_RCODE_NOERROR\n");
+        MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_NOERROR\n");
 
         send_udp_packet(out, outlen);
-
 
     }
 

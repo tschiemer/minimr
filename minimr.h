@@ -7,28 +7,30 @@
 #ifndef MINIMR_DNS_MINIMR_DNS_H
 #define MINIMR_DNS_MINIMR_DNS_H
 
-#include <stdint.h>
-
 #include "minimropt.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#ifndef ASSERT
-#define ASSERT(x)
+#ifndef NULL
+#define NULL 0
 #endif
 
-#ifndef DEBUGF
-#define DEBUGF(fmt,...)
+#ifndef MINIMR_ASSERT
+#define MINIMR_ASSERT(x)
+#endif
+
+#ifndef MINIMR_DEBUGF
+#define MINIMR_DEBUGF(fmt,...)
 #endif
 
 #ifndef MINIMR_DNS_TXT_MARKER1
-#define MINIMR_DNS_TXT_MARKER1 '/'
+#define MINIMR_DNS_TXT_MARKER1 '.'
 #endif
 
 #ifndef MINIMR_DNS_TXT_MARKER2
-#define MINIMR_DNS_TXT_MARKER2 '/'
+#define MINIMR_DNS_TXT_MARKER2 '.'
 #endif
 
 #ifndef MINIMR_DNS_RR_A_IPv4_FIELD_OFFSET
