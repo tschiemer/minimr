@@ -330,6 +330,27 @@ struct minimr_dns_rr {
     MINIMR_DNS_RR_TYPE_END()
 
 
+#if MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN > 0
+typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_a;
+#endif
+
+#if MINIMR_DNS_RR_TYPE_AAAA_DEFAULT_NAMELEN > 0
+typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaa;
+#endif
+
+#if MINIMR_DNS_RR_TYPE_PTR_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_PTR_DEFAULT_DOMAINLEN > 0
+typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaa;
+#endif
+
+#if MINIMR_DNS_RR_TYPE_SRV_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_SRV_DEFAULT_TARGETLEN > 0
+typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaa;
+#endif
+
+#if MINIMR_DNS_RR_TYPE_TXT_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_TXT_DEFAULT_TXTLEN > 0
+typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaa;
+#endif
+
+
 // NOTE: these getters make assumptions about the position in memory
 #define MINIMR_DNS_RR_A_GET_IPv4_PTR(__rr_ptr__) ((uint8_t*) &(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_A_IPv4_PTR_OFFSET] )
 
