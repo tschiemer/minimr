@@ -15,11 +15,11 @@ using namespace std;
 // otherwise you can encode the length of each following component, such as "\x0fWhere be Kittens\x05local"
 // also, the terminating NUL-character '\0' is necessary.
 
-#define RR_A_NAME ".Where be Kittens.local"
+#define RR_A_NAME ".where-be-kittens.local"
 // the predefined IPv4 type is an uint8_t[4]
 #define RR_A_IPv4 {127, 0, 0, 1}
 
-#define RR_AAAA_NAME ".asdfasdf.local"
+#define RR_AAAA_NAME ".where-be-kittens.local"
 // the predefined IPv6 type is an uint16_t[8]
 #define RR_AAAA_IPv6 {1,2,3,4,5,6,7,8}
 
@@ -48,7 +48,7 @@ typedef
 MINIMR_DNS_RR_TYPE_BEGIN(sizeof(RR_CUSTOM_PTR_NAME))
 MINIMR_DNS_RR_TYPE_BODY_PTR(sizeof(RR_CUSTOM_PTR_DOMAIN))
     struct minimr_dns_rr * rr_a;
-    struct minimr_dns_rr * rr_srv;
+    struct minimr_dns_rr * rr_aaaa;
     struct minimr_dns_rr * rr_txt;
 MINIMR_DNS_RR_TYPE_END()
 Custom_PTR_RR;
@@ -133,7 +133,7 @@ static Custom_PTR_RR RR_CUSTOM = {
     .domain_length = sizeof(RR_CUSTOM_PTR_NAME), // TODO automate for default case
     .domain = RR_CUSTOM_PTR_DOMAIN,
     .rr_a = (struct minimr_dns_rr *)&RR_A,
-    .rr_srv = (struct minimr_dns_rr *)&RR_PTR,
+    .rr_aaaa = (struct minimr_dns_rr *)&RR_AAAA,
     .rr_txt = (struct minimr_dns_rr *)&RR_TXT,
 };
 
@@ -187,8 +187,11 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
 
     if (type == minimr_dns_rr_fun_type_get_answer_rrs){
 
-        // RNAME(variable len) RTYPE(2) RCLASS(2) TTL(4) RDLENGTH(2) DATA(4)
-        if (outmsgmaxlen < rr->name_length + 14){
+        if ((rr->type == MINIMR_DNS_TYPE_A && outmsgmaxlen < MINIMR_DNS_RR_A_SIZE(rr)) ||
+            (rr->type == MINIMR_DNS_TYPE_AAAA && outmsgmaxlen < MINIMR_DNS_RR_AAAA_SIZE(rr)) ||
+            (rr->type == MINIMR_DNS_TYPE_PTR && outmsgmaxlen < MINIMR_DNS_RR_PTR_SIZE(rr, *MINIMR_DNS_RR_GET_PTR_DOMAINLENGTH_FIELD(rr))) ||
+            (rr->type == MINIMR_DNS_TYPE_SRV && outmsgmaxlen < MINIMR_DNS_RR_SRV_SIZE(rr, *MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(rr))) ||
+            (rr->type == MINIMR_DNS_TYPE_TXT && outmsgmaxlen < MINIMR_DNS_RR_TXT_SIZE(rr, *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(rr)))) {
             return MINIMR_NOT_OK;
         }
 
@@ -240,7 +243,6 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
             static struct minimr_dns_rr * extrarrs[] = {
                     (struct minimr_dns_rr *)&RR_A,
                     (struct minimr_dns_rr *)&RR_AAAA,
-                    (struct minimr_dns_rr *)&RR_SRV,
                     (struct minimr_dns_rr *)&RR_TXT,
             };
 
@@ -251,6 +253,15 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
             for (int i = 0; i < nextrarr; i++){
 
                 struct minimr_dns_rr * extra = extrarrs[i];
+
+
+                if ((extra->type == MINIMR_DNS_TYPE_A && outmsgmaxlen < MINIMR_DNS_RR_A_SIZE(rr)) ||
+                    (extra->type == MINIMR_DNS_TYPE_AAAA && outmsgmaxlen < MINIMR_DNS_RR_AAAA_SIZE(rr)) ||
+                    (extra->type == MINIMR_DNS_TYPE_PTR && outmsgmaxlen < MINIMR_DNS_RR_PTR_SIZE(rr, *MINIMR_DNS_RR_GET_PTR_DOMAINLENGTH_FIELD(rr))) ||
+                    (extra->type == MINIMR_DNS_TYPE_SRV && outmsgmaxlen < MINIMR_DNS_RR_SRV_SIZE(rr, *MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(rr))) ||
+                    (extra->type == MINIMR_DNS_TYPE_TXT && outmsgmaxlen < MINIMR_DNS_RR_TXT_SIZE(rr, *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(rr)))) {
+                    return MINIMR_NOT_OK;
+                }
 
                 MINIMR_DNS_RR_WRITE(extra, outmsg, l)
 
@@ -318,9 +329,7 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
     if (type == minimr_dns_rr_fun_type_get_answer_rrs){
 
-
-        // RNAME(variable len) RTYPE(2) RCLASS(2) TTL(4) RDLENGTH(2) DATA(4)
-        if (outmsgmaxlen < rr->name_length + 14){
+        if (outmsgmaxlen < MINIMR_DNS_RR_A_SIZE(rr)){
             return MINIMR_NOT_OK;
         }
 
@@ -339,11 +348,15 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
     if (type == minimr_dns_rr_fun_type_get_additional_rrs) {
 
+        if (outmsgmaxlen < MINIMR_DNS_RR_A_SIZE(custom_rr->rr_a) + MINIMR_DNS_RR_AAAA_SIZE(custom_rr->rr_aaaa) + MINIMR_DNS_RR_TXT_SIZE(custom_rr->rr_txt, *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(custom_rr->rr_txt))){
+            return MINIMR_NOT_OK;
+        }
+
         MINIMR_DNS_RR_WRITE_A(custom_rr->rr_a, outmsg, l, MINIMR_DNS_RR_GET_A_IPv4_FIELD(custom_rr->rr_a))
 
-        MINIMR_DNS_RR_WRITE_TXT(custom_rr->rr_txt, outmsg, l, MINIMR_DNS_RR_GET_TXT_TXT_FIELD(custom_rr->rr_txt), *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(custom_rr->rr_txt))
+        MINIMR_DNS_RR_WRITE_AAAA(custom_rr->rr_a, outmsg, l, MINIMR_DNS_RR_GET_A_IPv4_FIELD(custom_rr->rr_a))
 
-        MINIMR_DNS_RR_WRITE_SRV(custom_rr->rr_srv, outmsg, l, *MINIMR_DNS_RR_GET_SRV_PRIORITY_FIELD(custom_rr->rr_srv), *MINIMR_DNS_RR_GET_SRV_WEIGHT_FIELD(custom_rr->rr_srv), *MINIMR_DNS_RR_GET_SRV_PORT_FIELD(custom_rr->rr_srv), MINIMR_DNS_RR_GET_SRV_TARGET_FIELD(custom_rr->rr_srv), *MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(custom_rr->rr_srv))
+        MINIMR_DNS_RR_WRITE_TXT(custom_rr->rr_txt, outmsg, l, MINIMR_DNS_RR_GET_TXT_TXT_FIELD(custom_rr->rr_txt), *MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(custom_rr->rr_txt))
 
         *nrr += 3;
 
@@ -381,12 +394,19 @@ int main() {
 
 
     for (int i = 0; i < NRECORDS; i++){
-        minimr_dns_normalize_name(records[i]);
+
+        if (records[i] == NULL){
+            continue;
+        }
+
+        minimr_dns_normalize_name(records[i]->name, &records[i]->name_length);
 
         if (records[i]->type == MINIMR_DNS_TYPE_TXT){
-
             // NOTE: MINIMR_DNS_RR_GET_TXT_FIELD makes assumptions about memory layout (when using predefined type)
             minimr_dns_normalize_txt(MINIMR_DNS_RR_GET_TXT_TXT_FIELD(records[i]));
+        }
+        if (records[i]->type == MINIMR_DNS_TYPE_SRV){
+            minimr_dns_normalize_name(MINIMR_DNS_RR_GET_SRV_TARGET_FIELD(records[i]), MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(records[i]));
         }
     }
 

@@ -244,6 +244,17 @@ struct minimr_dns_rr {
     uint8_t name[];
 };
 
+// RNAME(variable) RTYPE(2) RCLASS(2) TTL(4) RDLENGTH(2)
+#define MINIMR_DNS_RR_SIZE_BASE(__rr_ptr__) ( (__rr_ptr__)->name_length + 10 )
+
+#define MINIMR_DNS_RR_A_SIZE(__rr_ptr__)                    (MINIMR_DNS_RR_SIZE_BASE(__rr_ptr__) + 4)
+#define MINIMR_DNS_RR_AAAA_SIZE(__rr_ptr__)                 (MINIMR_DNS_RR_SIZE_BASE(__rr_ptr__) + 16)
+#define MINIMR_DNS_RR_PTR_SIZE(__rr_ptr__, __domainlen__)   (MINIMR_DNS_RR_SIZE_BASE(__rr_ptr__) + (__domainlen__))
+#define MINIMR_DNS_RR_SRV_SIZE(__rr_ptr__, __targetlen__)   (MINIMR_DNS_RR_SIZE_BASE(__rr_ptr__) + 6 + (__targetlen__))
+#define MINIMR_DNS_RR_TXT_SIZE(__rr_ptr__, __txtlen__)      (MINIMR_DNS_RR_SIZE_BASE(__rr_ptr__) + (__txtlen__))
+
+
+
 // identical memory layout as struct minimr_dns_rr
 #define MINIMR_DNS_RR_TYPE_BEGIN(__namelen__) \
     struct { \
@@ -321,8 +332,8 @@ struct minimr_dns_rr {
 #define MINIMR_DNS_RR_GET_SRV_PRIORITY_FIELD(__rr_ptr__) ( (uint16_t*)&(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_SRV_PRIORITY_FIELD_OFFSET] )
 #define MINIMR_DNS_RR_GET_SRV_WEIGHT_FIELD(__rr_ptr__) ( (uint16_t*)&(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_SRV_WEIGHT_FIELD_OFFSET] )
 #define MINIMR_DNS_RR_GET_SRV_PORT_FIELD(__rr_ptr__) ( (uint16_t*)&(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_SRV_PORT_FIELD_OFFSET] )
-#define MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(__rr_ptr__) ( (uint8_t*)&(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_SRV_TARGETLENGTH_FIELD_OFFSET] )
-#define MINIMR_DNS_RR_GET_SRV_TARGET_FIELD(__rr_ptr__) ( (uint16_t*)&(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_SRV_TARGET_FIELD_OFFSET] )
+#define MINIMR_DNS_RR_GET_SRV_TARGETLENGTH_FIELD(__rr_ptr__) ( (uint16_t*)&(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_SRV_TARGETLENGTH_FIELD_OFFSET] )
+#define MINIMR_DNS_RR_GET_SRV_TARGET_FIELD(__rr_ptr__) ( (uint8_t*)&(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_SRV_TARGET_FIELD_OFFSET] )
 
 #define MINIMR_DNS_RR_GET_TXT_TXTLENGTH_FIELD(__rr_ptr__) ( (uint16_t*)&(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_TXT_TXTLENGTH_FIELD_OFFSET] )
 #define MINIMR_DNS_RR_GET_TXT_TXT_FIELD(__rr_ptr__) ( (uint8_t*)&(__rr_ptr__)->name[(__rr_ptr__)->name_length + MINIMR_DNS_RR_TXT_TXT_FIELD_OFFSET] )
@@ -389,19 +400,19 @@ struct minimr_dns_rr {
 
 
 // __var_txt__ is assumed uint8_t[__var_txt__]
-#define MINIMR_DNS_RR_WRITE_SRV_BODY(__rr_ptr__, __var_msg__, __var_len__, __priority__, __weight__, __port__, __var_target__, __target_len__) \
+#define MINIMR_DNS_RR_WRITE_SRV_BODY(__rr_ptr__, __var_msg__, __var_len__, __priority__, __weight__, __port__, __var_target__, __targetlen__) \
     (__var_msg__)[(__var_len__)++] = ((__priority__) >> 8) & 0xff; \
     (__var_msg__)[(__var_len__)++] = (__priority__) & 0xff; \
     (__var_msg__)[(__var_len__)++] = ((__weight__) >> 8) & 0xff; \
     (__var_msg__)[(__var_len__)++] = (__weight__) & 0xff; \
     (__var_msg__)[(__var_len__)++] = ((__port__) >> 8) & 0xff; \
     (__var_msg__)[(__var_len__)++] = (__port__) & 0xff; \
-    for(uint16_t i = 0; i < (__target_len__); i++){ (__var_msg__)[(__var_len__)+i] = (__var_target__)[i]; } \
-    (__var_len__) += __target_len__;
+    for(uint16_t i = 0; i < (__targetlen__); i++){ (__var_msg__)[(__var_len__)+i] = (__var_target__)[i]; } \
+    (__var_len__) += __targetlen__;
 
-#define MINIMR_DNS_RR_WRITE_SRV(__rr_ptr__, __var_msg__, __var_len__, __priority__, __weight__, __port__, __var_target__, __target_len__) \
+#define MINIMR_DNS_RR_WRITE_SRV(__rr_ptr__, __var_msg__, __var_len__, __priority__, __weight__, __port__, __var_target__, __targetlen__) \
     MINIMR_DNS_RR_WRITE(__rr_ptr__, __var_msg__, __var_len__) \
-    MINIMR_DNS_RR_WRITE_SRV_BODY(__rr_ptr__, __var_msg__, __var_len__, __priority__, __weight__, __port__, __var_target__, __target_len__)
+    MINIMR_DNS_RR_WRITE_SRV_BODY(__rr_ptr__, __var_msg__, __var_len__, __priority__, __weight__, __port__, __var_target__, __targetlen__)
 
 
 // __var_txt__ is assumed uint8_t[__txt_len__]
@@ -417,7 +428,7 @@ struct minimr_dns_rr {
 void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes);
 void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr);
 
-void minimr_dns_normalize_name(struct minimr_dns_rr *rr);
+void minimr_dns_normalize_name(uint8_t * name, uint16_t * len);
 void minimr_dns_normalize_txt(uint8_t *txt);
 
 uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);

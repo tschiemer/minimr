@@ -33,34 +33,33 @@ void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr) {
     MINIMR_DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
 }
 
-void minimr_dns_normalize_name(struct minimr_dns_rr * rr)
+void minimr_dns_normalize_name(uint8_t * name, uint16_t * length)
 {
-    if (rr == NULL){
-        return;
-    }
+    MINIMR_ASSERT(name != NULL);
+    MINIMR_ASSERT(length != NULL);
 
     uint16_t i = 0;
 
-    while(rr->name[i] != '\0'){
+    while(name[i] != '\0'){
 
 //        MINIMR_DEBUGF("txt %d %c\n",i, rr->name[i]);
 
-        MINIMR_ASSERT(rr->name[i] == '.');
+        MINIMR_ASSERT(name[i] == '.');
 
         uint16_t l = 1;
 
-        for(; rr->name[i+l] != '\0' && rr->name[i+l] != '.'; l++){
+        for(; name[i+l] != '\0' && name[i+l] != '.'; l++){
             // just looking for boundary
         }
 
         MINIMR_ASSERT(l > 0);
 
-        rr->name[i] = l - 1;
+        name[i] = l - 1;
 
         i += l;
     }
 
-    rr->name_length = i + 1;
+    *length = i + 1;
 //    MINIMR_DEBUGF("%d\n", rr->name_length);
 }
 
