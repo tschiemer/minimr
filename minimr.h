@@ -130,7 +130,7 @@ struct minimr_dns_hdr {
     uint16_t nextrarr;
 };
 
-#define MINIMR_DNS_UNICAST          0x8000  // unicast requested
+#define MINIMR_DNS_QUNICAST          0x8000  // unicast requested
 #define MINIMR_DNS_QCLASS           0x7FFF  // mask for qclass
 
 #define MINIMR_DNS_CLASS_IN        0x0001
@@ -221,7 +221,9 @@ enum minimr_dns_rr_fun_type {
     minimr_dns_rr_fun_type_is_uptodate,
     minimr_dns_rr_fun_type_get_answer_rrs,
     minimr_dns_rr_fun_type_get_authority_rrs,
-    minimr_dns_rr_fun_type_get_additional_rrs
+    minimr_dns_rr_fun_type_get_additional_rrs,
+    minimr_dns_rr_fun_type_get_questions,
+    minimr_dns_rr_fun_type_get_knownanswer_rrs
 };
 
 // forward declaration for minimr_dns_rr_fun
@@ -232,6 +234,8 @@ struct minimr_dns_rr;
  * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_answer_rrs, struct minimr_dns_rr * rr, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr)
  * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_authority_rrs, .. ) // same as above
  * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_additional_rrs, .. ) // same as above
+ * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_knownanswer_rrs, ..) // same as above
+ * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_answer_rrs, .. same as above .., unicast_requested)
  */
 typedef int (*minimr_dns_rr_fun)(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr *rr, ...);
 
@@ -256,6 +260,8 @@ struct minimr_dns_rr {
 #define MINIMR_DNS_RR_SRV_SIZE(__rr_ptr__, __targetlen__)   (MINIMR_DNS_RR_SIZE_BASE(__rr_ptr__) + 6 + (__targetlen__))
 #define MINIMR_DNS_RR_TXT_SIZE(__rr_ptr__, __txtlen__)      (MINIMR_DNS_RR_SIZE_BASE(__rr_ptr__) + (__txtlen__))
 
+// QNAME(variable) QTYPE(2) QCLASS(2)
+#define MINIMR_DNS_Q_SIZE(__rr_ptr__) ( (__rr_ptr__)->name_length + 4 )
 
 
 // identical memory layout as struct minimr_dns_rr
@@ -428,6 +434,15 @@ struct minimr_dns_rr {
     MINIMR_DNS_RR_WRITE_TXT_BODY(__rr_ptr__, __var_msg__, __var_len__, __var_txt__, __txt_len__)
 
 
+#define MINIMR_DNS_Q_WRITE(__rr_ptr__,  __var_msg__, __var_len__, __unicast_requested__) \
+    for(uint16_t i = 0; i < (__rr_ptr__)->name_length; i++){ (__var_msg__)[(__var_len__)+i] = (__rr_ptr__)->name[i]; } \
+    (__var_len__) += (__rr_ptr__)->name_length; \
+    (__var_msg__)[(__var_len__)++] = ((__rr_ptr__)->type >> 8) & 0xff; \
+    (__var_msg__)[(__var_len__)++] = (__rr_ptr__)->type & 0xff; \
+    (__var_msg__)[(__var_len__)++] = ((__rr_ptr__)->cache_class | ((__unicast_requested__) & MINIMR_DNS_QUNICAST) >> 8) & 0xff; \
+    (__var_msg__)[(__var_len__)++] = (__rr_ptr__)->cache_class & 0xff;
+
+
 void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes);
 void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr);
 
@@ -464,6 +479,12 @@ uint8_t minimr_announce(
 uint8_t minimr_terminate(
         struct minimr_dns_rr **records, uint16_t nrecords,
         uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
+);
+
+uint8_t minimr_dns_query(
+        struct minimr_dns_rr **records, uint16_t nrecords,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+        uint8_t unicast_requested
 );
 
 #ifdef __cplusplus

@@ -105,7 +105,7 @@ uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat * stat, uint8
 
     *pos = p;
 
-    MINIMR_DEBUGF("qstat\n type %d unicast %d class %d name_offset %d name_len %d\n", stat->type, stat->unicast_class & MINIMR_DNS_UNICAST, stat->unicast_class & MINIMR_DNS_QCLASS, stat->name_offset, stat->name_length);
+    MINIMR_DEBUGF("qstat\n type %d unicast %d class %d name_offset %d name_len %d\n", stat->type, stat->unicast_class & MINIMR_DNS_QUNICAST, stat->unicast_class & MINIMR_DNS_QCLASS, stat->name_offset, stat->name_length);
 
     return MINIMR_OK;
 }
@@ -394,7 +394,7 @@ uint8_t minimr_handle_msg(
                 if (rr->fun(minimr_dns_rr_fun_type_is_uptodate, rr, &rstat, msg) == MINIMR_UPTODATE){
                     qstats[iq].relevant = 0;
                     remaining_nq--;
-                } else if ((qstats[iq].unicast_class & MINIMR_DNS_UNICAST) == MINIMR_DNS_UNICAST) {
+                } else if ((qstats[iq].unicast_class & MINIMR_DNS_QUNICAST) == MINIMR_DNS_QUNICAST) {
                     unicast_req = 1;
                 }
 
@@ -643,4 +643,86 @@ uint8_t minimr_terminate(
         records[i]->ttl = 0;
     }
     return minimr_announce(records, nrecords, outmsg, outmsglen, outmsgmaxlen);
+}
+
+uint8_t minimr_dns_query(
+        struct minimr_dns_rr **records, uint16_t nrecords,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+        uint8_t unicast_requested
+)
+{
+
+    // sanity check config
+    if (outmsgmaxlen <= MINIMR_DNS_HDR_SIZE){
+        return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+    }
+
+
+    uint16_t outlen = MINIMR_DNS_HDR_SIZE;
+
+    uint16_t nquestions = 0;
+
+    // add all normal answers RRs
+    for(uint16_t i = 0; i < nrecords; i++){
+
+        if (records[i] != NULL){
+            continue;
+        }
+
+        uint16_t nq = 0;
+
+        uint8_t res = records[i]->fun(minimr_dns_rr_fun_type_get_questions, records[i], outmsg, &outlen, outmsgmaxlen, &nq, unicast_requested);
+
+        if (res != MINIMR_OK){
+            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+        }
+
+        nquestions += nq;
+    }
+
+    MINIMR_DEBUGF("added %d questions rr\n", nquestions);
+
+
+    uint16_t nanswers = 0;
+
+    // add all normal answers RRs
+    for(uint16_t i = 0; i < nrecords; i++){
+
+        if (records[i] != NULL){
+            continue;
+        }
+
+        uint16_t nrr = 0;
+
+        uint8_t res = records[i]->fun(minimr_dns_rr_fun_type_get_knownanswer_rrs, records[i], outmsg, &outlen, outmsgmaxlen, &nrr);
+
+        if (res != MINIMR_OK){
+            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+        }
+
+        nanswers += nrr;
+    }
+
+    MINIMR_DEBUGF("added %d known answer rr\n", nanswers);
+
+    // prepare outheader and out sanity check
+    struct minimr_dns_hdr outhdr;
+
+    // finalize header
+    outhdr.transaction_id = 0;
+
+    outhdr.flags[0] = MINIMR_DNS_HDR1_QR_QUERY; // standard query = 0x0000
+    outhdr.flags[1] = 0;
+
+    outhdr.nquestions = nquestions;
+    outhdr.nanswers = nanswers;
+    outhdr.nauthrr = 0;
+    outhdr.nextrarr = 0;
+
+    // add header
+    minimr_dns_hton_hdr(outmsg, &outhdr);
+
+    *outmsglen = outlen;
+
+    return MINIMR_DNS_HDR2_RCODE_NOERROR;
 }

@@ -56,6 +56,11 @@ MINIMR_DNS_RR_TYPE_BODY_PTR(sizeof(RR_CUSTOM_PTR_DOMAIN))
 MINIMR_DNS_RR_TYPE_END()
 Custom_PTR_RR;
 
+typedef enum {
+    State_Probing,
+    State_UpAndRunning,
+} State;
+
 /***** function signatures *****/
 
 static int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...);
@@ -155,6 +160,8 @@ static  struct minimr_dns_rr * records[] = {
 
 static uint16_t NRECORDS = sizeof(records) / sizeof(struct minimr_dns_rr *);
 
+static State state;
+
 /***** functions *****/
 
 /** RR callbacks
@@ -185,6 +192,11 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
     uint16_t outmsgmaxlen = va_arg(args, int); // uint16_t will be promoted to int
     uint16_t * nrr = va_arg(args, uint16_t *);
 
+    uint8_t unicast_requested = 0;
+    if (type == minimr_dns_rr_fun_type_get_questions){
+        unicast_requested = va_arg(args,int); // uint8_t will be promoted to int
+    }
+
     va_end(args);
 
 
@@ -202,7 +214,7 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
 
         // helper macros to write all the standard fields of the record
         // you can naturally do this manually and customize it ;)
-        
+
         MINIMR_DNS_RR_WRITE(rr, outmsg, l)
 
         if (rr->type == MINIMR_DNS_TYPE_A) {
@@ -293,9 +305,37 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
         return MINIMR_OK;
     }
 
+    if (type == minimr_dns_rr_fun_type_get_questions){
 
-    // we could return an OK, but actually we should never reach here
-    return MINIMR_NOT_OK;
+        // only add queries for these types
+        if (rr->type != MINIMR_DNS_TYPE_A && rr->type != MINIMR_DNS_TYPE_AAAA && rr->type != MINIMR_DNS_TYPE_SRV){
+            return MINIMR_OK;
+        }
+
+        if (outmsgmaxlen < MINIMR_DNS_Q_SIZE(rr)){
+            return MINIMR_NOT_OK;
+        }
+
+        uint16_t l = *outmsglen;
+
+        // queries always look the same, independent of type
+        MINIMR_DNS_Q_WRITE(rr, outmsg, l, unicast_requested)
+
+        *nrr += 1;
+
+        *outmsglen = l;
+
+        return MINIMR_OK;
+    }
+
+    if (type == minimr_dns_rr_fun_type_get_knownanswer_rrs){
+
+        MINIMR_DEBUGF("unused feature as this is not an actual mDNS query but execution might reach here because of the initial probing step\n");
+
+        return MINIMR_OK;
+    }
+
+    return MINIMR_OK;
 }
 
 int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...)
@@ -324,6 +364,11 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
     uint16_t * outmsglen = va_arg(args, uint16_t *);
     uint16_t outmsgmaxlen = va_arg(args, int); // uint16_t will be promoted to int
     uint16_t * nrr = va_arg(args, uint16_t *);
+
+    uint8_t unicast_requested = 0;
+    if (type == minimr_dns_rr_fun_type_get_questions){
+        unicast_requested = va_arg(args,int); // uint8_t will be promoted to int
+    }
 
     va_end(args);
 
@@ -365,6 +410,12 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
     }
 
+    if (type == minimr_dns_rr_fun_type_get_questions){
+
+        MINIMR_DEBUGF("This is a ptr record - if we ask about it we will definitely get answers as long there are any services (so never query a PTR record during initial probing)\n");
+
+    }
+
     *outmsglen = l;
 
     return MINIMR_OK;
@@ -395,7 +446,7 @@ void send_udp_packet(uint8_t * payload, uint16_t len){
 
 int main() {
 
-
+    // properly initialize records
     for (int i = 0; i < NRECORDS; i++){
 
         if (records[i] == NULL){
@@ -412,6 +463,7 @@ int main() {
             minimr_dns_normalize_name(MINIMR_DNS_RR_SRV_GET_TARGET_PTR(records[i]), MINIMR_DNS_RR_SRV_GET_TARGETLEN_PTR(records[i]));
         }
     }
+
 
     struct minimr_dns_query_stat qstats[NQSTATS];
 
