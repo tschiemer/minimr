@@ -17,6 +17,7 @@ See [minimr-cli-demo](#minimr-cli-demo) to see an example implementation of how 
 - [Apple Bonjour](https://developer.apple.com/bonjour/)
 - [lwIP](http://www.nongnu.org/lwip/2_0_x/group__mdns.html): on top of stack
 - [mbed's nanostack](https://github.com/ARMmbed/mbed-os/blob/master/features/nanostack/sal-stack-nanostack/nanostack/ns_mdns_api.h): on top of stack??
+- [XMOS's lib_xctp](https://github.com/xmos/lib_xtcp/blob/master/lib_xtcp/src/mdns/): for their
 
 
 ## Todos
@@ -24,6 +25,11 @@ See [minimr-cli-demo](#minimr-cli-demo) to see an example implementation of how 
 - [Multicast DNS Character Set](https://tools.ietf.org/html/rfc6762#section-16) and in particular utf8 support
 - Support name compression for in received queries
 - Add startup probing (and query) functionality
+- Limit of responses of the same RR
+
+## Known Limitations
+
+- Doesn't handle fragmented/truncated/multi-packet messages. (should be ok?)
 
 ## minimr-cli-demo
 

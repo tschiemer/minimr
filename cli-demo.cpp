@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <cassert>
 #include <stdarg.h>
+#include <chrono>
 
 using namespace std;
 
@@ -58,11 +59,17 @@ Custom_PTR_RR;
 
 typedef enum {
     State_Probing,
-    State_UpAndRunning,
+    State_Responding,
+    State_TieBreaking
 } State;
 
 /***** function signatures *****/
 
+#if MINIMR_TIMESTAMP_USE
+uint32_t my_timestamp_now();
+#endif
+
+// rr handler functions
 static int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...);
 static int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...);
 
@@ -160,9 +167,16 @@ static  struct minimr_dns_rr * records[] = {
 
 static uint16_t NRECORDS = sizeof(records) / sizeof(struct minimr_dns_rr *);
 
-static State state;
-
 /***** functions *****/
+
+uint32_t my_timestamp_now_ms()
+{
+    //https://stackoverflow.com/questions/31255486/c-how-do-i-convert-a-stdchronotime-point-to-long-and-back
+
+    std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+    auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
+    return now_ms.time_since_epoch().count();
+}
 
 /** RR callbacks
  * minimr_dns_rr_fun( minimr_dns_rr_fun_type_is_uptodate, struct minimr_dns_rr * rr, struct minimr_dns_rr_stat * rstat, uint8_t * msg );
@@ -175,11 +189,23 @@ static State state;
 // thus a handler also knows best when to add additional
 int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...)
 {
-    MINIMR_ASSERT(type == minimr_dns_rr_fun_type_is_uptodate || type == minimr_dns_rr_fun_type_get_answer_rrs || type == minimr_dns_rr_fun_type_get_authority_rrs || type == minimr_dns_rr_fun_type_get_additional_rrs);
+    MINIMR_ASSERT(type == minimr_dns_rr_fun_type_respond_to || type == minimr_dns_rr_fun_type_get_answer_rrs || type == minimr_dns_rr_fun_type_get_authority_rrs || type == minimr_dns_rr_fun_type_get_additional_rrs);
 
 
-    if (type == minimr_dns_rr_fun_type_is_uptodate){
-        return MINIMR_NOT_UPTODATE;
+    if (type == minimr_dns_rr_fun_type_respond_to){
+
+        // TODO check if is up-to-date, wrong or whatever?
+
+        #if MINIMR_TIMESTAMP_USE
+        uint32_t now = my_timestamp_now_ms();
+
+        // if already answered within the last second, then don't answer
+        if (rr->last_responded + 1000 < now){
+            return MINIMR_DO_NOT_RESPOND;
+        }
+        #endif
+
+        return MINIMR_RESPOND;
     }
 
     // it isn't necessarily safe to put this here
@@ -340,15 +366,27 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
 
 int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * rr, ...)
 {
-    MINIMR_ASSERT(type == minimr_dns_rr_fun_type_is_uptodate || type == minimr_dns_rr_fun_type_get_answer_rrs || type == minimr_dns_rr_fun_type_get_authority_rrs || type == minimr_dns_rr_fun_type_get_additional_rrs);
+    MINIMR_ASSERT(type == minimr_dns_rr_fun_type_respond_to || type == minimr_dns_rr_fun_type_get_answer_rrs || type == minimr_dns_rr_fun_type_get_authority_rrs || type == minimr_dns_rr_fun_type_get_additional_rrs);
 
     // as this handler has only been assigned to our custom RR this MUST be true
     MINIMR_ASSERT( rr == (struct minimr_dns_rr *)&RR_CUSTOM );
 
     Custom_PTR_RR * custom_rr = (Custom_PTR_RR*)rr;
 
-    if (type == minimr_dns_rr_fun_type_is_uptodate){
-        return MINIMR_NOT_UPTODATE;
+    if (type == minimr_dns_rr_fun_type_respond_to){
+        
+        // TODO check if is up-to-date, wrong or whatever?
+
+        #if MINIMR_TIMESTAMP_USE
+        uint32_t now = my_timestamp_now_ms();
+
+        // if already answered within the last second, then don't answer
+        if (rr->last_responded + 1000 < now){
+            return MINIMR_DO_NOT_RESPOND;
+        }
+        #endif
+
+        return MINIMR_RESPOND;
     }
 
 
@@ -467,6 +505,7 @@ int main() {
 
     struct minimr_dns_query_stat qstats[NQSTATS];
 
+    State state = State_Probing;
 
     while(!feof(stdin)){
 
@@ -484,37 +523,50 @@ int main() {
 
         uint8_t unicast_requested;
 
-        uint8_t res = minimr_handle_msg(in, inlen, qstats, NQSTATS, records, NRECORDS, out, &outlen, sizeof(out), &unicast_requested);
+        if (state == State_Probing){
 
-        if (res == MINIMR_IGNORE){
-            // it's not a message we should bother about
-            MINIMR_DEBUGF("MINIMR_IGNORE\n");
-            continue;
         }
 
-        if (res == MINIMR_DNS_HDR2_RCODE_FORMERR){
-            // we could send a response to the querying device with this result code
-            // don't do this if it was a multicast
-            MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_FORMERR\n");
-            continue;
+        if (state == State_TieBreaking){
+            // TODO
         }
 
-        if (res == MINIMR_DNS_HDR2_RCODE_SERVAIL){
-            // we could send a response to the querying device with this result code
-            // don't do this if it was a multicast
-            MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_SERVAIL\n");
-            continue;
+        if (state == State_Responding){
+
+            uint8_t res = minimr_handle_queries(in, inlen, qstats, NQSTATS, records, NRECORDS, out, &outlen, sizeof(out), &unicast_requested);
+
+            if (res == MINIMR_IGNORE){
+                // it's not a message we should bother about
+                MINIMR_DEBUGF("MINIMR_IGNORE\n");
+                continue;
+            }
+
+            if (res == MINIMR_DNS_HDR2_RCODE_FORMERR){
+                // we could send a response to the querying device with this result code
+                // don't do this if it was a multicast
+                MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_FORMERR\n");
+                continue;
+            }
+
+            if (res == MINIMR_DNS_HDR2_RCODE_SERVAIL){
+                // we could send a response to the querying device with this result code
+                // don't do this if it was a multicast
+                MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_SERVAIL\n");
+                continue;
+            }
+
+            if (res != MINIMR_DNS_HDR2_RCODE_NOERROR){
+                // just a last test for safety
+                MINIMR_DEBUGF("other error!\n");
+                continue;
+            }
+
+            MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_NOERROR\n");
         }
 
-        if (res != MINIMR_DNS_HDR2_RCODE_NOERROR){
-            // just a last test for safety
-            MINIMR_DEBUGF("other error!\n");
-            continue;
+        if (outlen > 0){
+            send_udp_packet(out, outlen);
         }
-
-        MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_NOERROR\n");
-
-        send_udp_packet(out, outlen);
 
     }
 

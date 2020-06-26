@@ -5,14 +5,25 @@
 #ifndef MINIMR_MINIMROPT_H
 #define MINIMR_MINIMROPT_H
 
-// the standard int definitions (uint8_t etc) are required, define as you please
-#include <stdint.h>
-
+// application (cli-demo.cpp) specific includes
 #include <stdio.h>
 #include <assert.h>
 
+
+// the standard int definitions (uint8_t etc) are required, define as you please
+#include <stdint.h>
+
+#define MINIMR_TIMESTAMP_USE 1
+#define MINIMR_TIMESTAMP_TYPE uint32_t
+//#define MINIMR_TIMESTAMP_NOW() my_timestamp_now()
+//#define MINIMR_TIMESTAMP_1SEC_PASSED(earlier, later) my_timestamp_1sec_passed(earlier, later)
+
+
+
+// optional
 #define MINIMR_ASSERT(x) assert(x)
 
+// optional
 #define MINIMR_DEBUGF(...) fprintf(stderr, __VA_ARGS__)
 
 

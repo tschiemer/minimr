@@ -25,13 +25,29 @@ extern "C" {
 #define MINIMR_DEBUGF(fmt,...)
 #endif
 
-#ifndef MINIMR_DNS_TXT_MARKER1
-#define MINIMR_DNS_TXT_MARKER1 '.'
+#if MINIMR_TIMESTAMP_USE == 1
+
+#ifndef MINIMR_TIMESTAMP_TYPE
+#define MINIMR_TIMESTAMP_TYPE uint32_t
 #endif
 
-#ifndef MINIMR_DNS_TXT_MARKER2
-#define MINIMR_DNS_TXT_MARKER2 '.'
+#define MINIMR_TIMESTAMP_FIELD MINIMR_TIMESTAMP_TYPE last_responded;
+
+#else //MINIMR_TIMESTAMP_USE == 0
+#define MINIMR_TIMESTAMP_FIELD
 #endif
+
+//#ifndef MINIMR_TIMESTAMP_NOW
+//#define MINIMR_TIMESTAMP_NOW()
+//#else
+//extern MINIMR_TIMESTAMP_TYPE MINIMR_TIMESTAMP_NOW();
+//#endif
+//
+//#ifndef MINIMR_TIMESTAMP_1SEC_PASSED
+//#define MINIMR_TIMESTAMP_1SEC_PASSED(earlier, later)
+//#else
+//extern uint8_t MINIMR_TIMESTAMP_1SEC_PASSED(MINIMR_TIMESTAMP_TYPE * earlier, MINIMR_TIMESTAMP_TYPE * later);
+//#endif
 
 #ifndef MINIMR_DNS_RR_A_IPv4_PTR_OFFSET
 #define MINIMR_DNS_RR_A_IPv4_PTR_OFFSET 0
@@ -80,8 +96,8 @@ extern "C" {
 #define MINIMR_OK           0
 #define MINIMR_NOT_OK       1
 
-#define MINIMR_UPTODATE         2
-#define MINIMR_NOT_UPTODATE     3
+#define MINIMR_RESPOND          2
+#define MINIMR_DO_NOT_RESPOND   3
 
 
 #define MINIMR_DNS_HDR_SIZE 12
@@ -218,7 +234,7 @@ struct minimr_dns_rr_stat {
 
 
 enum minimr_dns_rr_fun_type {
-    minimr_dns_rr_fun_type_is_uptodate,
+    minimr_dns_rr_fun_type_respond_to,
     minimr_dns_rr_fun_type_get_answer_rrs,
     minimr_dns_rr_fun_type_get_authority_rrs,
     minimr_dns_rr_fun_type_get_additional_rrs,
@@ -243,6 +259,8 @@ struct minimr_dns_rr {
     uint16_t type;
     uint16_t cache_class;
     uint32_t ttl;
+
+    MINIMR_TIMESTAMP_FIELD
 
     minimr_dns_rr_fun fun;
 
@@ -270,6 +288,8 @@ struct minimr_dns_rr {
         uint16_t type; \
         uint16_t cache_class; \
         uint32_t ttl; \
+        \
+        MINIMR_TIMESTAMP_FIELD \
         \
         minimr_dns_rr_fun fun; \
         \
@@ -483,7 +503,7 @@ uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat *stat, uint8_
 
 uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
 
-uint8_t minimr_handle_msg(
+uint8_t minimr_handle_queries(
     uint8_t *msg, uint16_t msglen,
     struct minimr_dns_query_stat stats[], uint16_t nqstats,
     struct minimr_dns_rr **records, uint16_t nrecords,

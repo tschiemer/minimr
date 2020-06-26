@@ -204,7 +204,7 @@ uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat * stat, uint8_t * m
 }
 
 
-uint8_t minimr_handle_msg(
+uint8_t minimr_handle_queries(
         uint8_t * msg, uint16_t msglen,
         struct minimr_dns_query_stat qstats[], uint16_t nqstats,
         struct minimr_dns_rr ** records, uint16_t nrecords,
@@ -391,7 +391,7 @@ uint8_t minimr_handle_msg(
 
                 // so it's a match and we have to check wether it's up to date
                 struct minimr_dns_rr * rr = records[qstats[iq].ir];
-                if (rr->fun(minimr_dns_rr_fun_type_is_uptodate, rr, &rstat, msg) == MINIMR_UPTODATE){
+                if (rr->fun(minimr_dns_rr_fun_type_respond_to, rr, &rstat, msg) == MINIMR_DO_NOT_RESPOND){
                     qstats[iq].relevant = 0;
                     remaining_nq--;
                 } else if ((qstats[iq].unicast_class & MINIMR_DNS_QUNICAST) == MINIMR_DNS_QUNICAST) {
