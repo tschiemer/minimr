@@ -444,7 +444,7 @@ uint8_t minimr_handle_msg(
         nanswers += nrr;
     }
 
-    MINIMR_DEBUGF("outlen %d\n", outlen);
+    MINIMR_DEBUGF("added %d answer rr\n", nanswers);
 
     // add all authority RRs
     uint16_t nauthrr = 0;
@@ -468,7 +468,7 @@ uint8_t minimr_handle_msg(
         nauthrr += nrr;
     }
 
-    MINIMR_DEBUGF("outlen %d\n", outlen);
+    MINIMR_DEBUGF("added %d authority rr\n", nauthrr);
 
     // add all additional RRs
     uint16_t nextrarr = 0;
@@ -492,15 +492,11 @@ uint8_t minimr_handle_msg(
         nextrarr += nrr;
     }
 
-    MINIMR_DEBUGF("outlen %d\n", outlen);
+    MINIMR_DEBUGF("added %d extra rr\n", nextrarr);
 
     // prepare outheader and out sanity check
     struct minimr_dns_hdr outhdr;
 
-//    // memset outheader
-//    for(int i = 0; i < sizeof(outhdr); i++){
-//        *(uint8_t*)&outhdr = 0;
-//    }
 
     // finalize header
     outhdr.transaction_id = hdr.transaction_id; // likely to be 0x0000 ....
@@ -519,4 +515,121 @@ uint8_t minimr_handle_msg(
     *outmsglen = outlen;
 
     return MINIMR_DNS_HDR2_RCODE_NOERROR;
+}
+
+
+uint8_t minimr_announce(
+    struct minimr_dns_rr **records, uint16_t nrecords,
+    uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
+)
+{
+
+    // sanity check config
+    if (outmsgmaxlen <= MINIMR_DNS_HDR_SIZE){
+        return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+    }
+
+
+    uint16_t outlen = MINIMR_DNS_HDR_SIZE;
+
+    uint16_t nanswers = 0;
+
+    // add all normal answers RRs
+    for(uint16_t i = 0; i < nrecords; i++){
+
+        if (records[i] != NULL){
+            continue;
+        }
+
+        uint16_t nrr = 0;
+
+        uint8_t res = records[i]->fun(minimr_dns_rr_fun_type_get_answer_rrs, records[i], outmsg, &outlen, outmsgmaxlen, &nrr);
+
+        if (res != MINIMR_OK){
+            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+        }
+
+        nanswers += nrr;
+    }
+
+    MINIMR_DEBUGF("added %d answer rr\n", nanswers);
+
+    // add all authority RRs
+    uint16_t nauthrr = 0;
+    for(uint16_t i = 0; i < nrecords; i++){
+
+        if (records[i] != NULL){
+            continue;
+        }
+
+        uint16_t nrr = 0;
+
+        uint8_t res = records[i]->fun(minimr_dns_rr_fun_type_get_authority_rrs, records[i], outmsg, &outlen, outmsgmaxlen, &nrr);
+
+        if (res != MINIMR_OK){
+            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+        }
+
+        nauthrr += nrr;
+    }
+
+    MINIMR_DEBUGF("added %d authority rr\n", nauthrr);
+
+    // add all additional RRs
+    uint16_t nextrarr = 0;
+    for(uint16_t i = 0; i < nrecords; i++){
+
+        if (records[i] != NULL){
+            continue;
+        }
+
+        uint16_t nrr = 0;
+
+        uint8_t res = records[i]->fun(minimr_dns_rr_fun_type_get_authority_rrs, records[i], outmsg, &outlen, outmsgmaxlen, &nrr);
+
+        if (res != MINIMR_OK){
+            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+        }
+
+        nextrarr += nrr;
+    }
+
+
+    MINIMR_DEBUGF("added %d extra rr\n", nextrarr);
+
+    // prepare outheader and out sanity check
+    struct minimr_dns_hdr outhdr;
+
+    // finalize header
+    outhdr.transaction_id = 0;
+
+    outhdr.flags[0] = MINIMR_DNS_HDR1_QR_REPLY | MINIMR_DNS_HDR1_AA;
+    outhdr.flags[1] = MINIMR_DNS_HDR2_RCODE_NOERROR;
+
+    outhdr.nquestions = 0;
+    outhdr.nanswers = nanswers;
+    outhdr.nauthrr = nauthrr;
+    outhdr.nextrarr = nextrarr;
+
+    // add header
+    minimr_dns_hton_hdr(outmsg, &outhdr);
+
+    *outmsglen = outlen;
+
+    return MINIMR_DNS_HDR2_RCODE_NOERROR;
+}
+
+
+uint8_t minimr_terminate(
+    struct minimr_dns_rr **records, uint16_t nrecords,
+    uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
+)
+{
+    for(uint16_t i = 0; i < nrecords; i++){
+        if (records[i] == NULL){
+            continue;
+        }
+        records[i]->ttl = 0;
+    }
+    return minimr_announce(records, nrecords, outmsg, outmsglen, outmsgmaxlen);
 }

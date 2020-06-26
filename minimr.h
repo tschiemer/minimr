@@ -445,8 +445,19 @@ uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat *stat, uint8_
 uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
 
 uint8_t minimr_handle_msg(
-        uint8_t *msg, uint16_t msglen,
-        struct minimr_dns_query_stat stats[], uint16_t nqstats,
+    uint8_t *msg, uint16_t msglen,
+    struct minimr_dns_query_stat stats[], uint16_t nqstats,
+    struct minimr_dns_rr **records, uint16_t nrecords,
+    uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
+);
+
+uint8_t minimr_announce(
+    struct minimr_dns_rr **records, uint16_t nrecords,
+    uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
+);
+
+
+uint8_t minimr_terminate(
         struct minimr_dns_rr **records, uint16_t nrecords,
         uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
 );
