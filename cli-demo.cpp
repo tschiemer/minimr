@@ -730,6 +730,10 @@ int main()
 
             // do whatever
 
+            MINIMR_DEBUGF("We should reconfigure, but that's not implemented!\n");
+
+            exit(EXIT_FAILURE);
+
             state = State_Init;
         }
         #endif // RECORDS_ARE_UNIQUE == 0
