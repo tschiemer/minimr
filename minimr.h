@@ -518,8 +518,8 @@ typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr
     (__nauthrr__) = ((__src__)[8] << 8) | (__src__)[9]; \
     (__nextrarr__) = ((__src__)[10] << 8) | (__src__)[11];
 
-#define minimr_dns_ntoh_hdr(__hdr__, __src__) MINIMR_DNS_HDR_READ(__src__, (__hdr__)->transaction_id, (__hdr__)->flags[0], (__hdr__)->flags[1], (__hdr__)->nquestions, (__hdr__)->nanswers, (__hdr__)->nauthrr, (__hdr__)->nextrarr)
-#define minimr_dns_hton_hdr(__dst__, __hdr__) MINIMR_DNS_HDR_WRITE(__dst__, (__hdr__)->transaction_id, (__hdr__)->flags[0], (__hdr__)->flags[1], (__hdr__)->nquestions, (__hdr__)->nanswers, (__hdr__)->nauthrr, (__hdr__)->nextrarr)
+//#define minimr_dns_ntoh_hdr(__hdr__, __src__) MINIMR_DNS_HDR_READ(__src__, (__hdr__)->transaction_id, (__hdr__)->flags[0], (__hdr__)->flags[1], (__hdr__)->nquestions, (__hdr__)->nanswers, (__hdr__)->nauthrr, (__hdr__)->nextrarr)
+//#define minimr_dns_hton_hdr(__dst__, __hdr__) MINIMR_DNS_HDR_WRITE(__dst__, (__hdr__)->transaction_id, (__hdr__)->flags[0], (__hdr__)->flags[1], (__hdr__)->nquestions, (__hdr__)->nanswers, (__hdr__)->nauthrr, (__hdr__)->nextrarr)
 
 //void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes);
 //void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr);
