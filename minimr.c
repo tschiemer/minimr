@@ -4,33 +4,64 @@
 
 #include "minimr.h"
 
-void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes) {
-    hdr->transaction_id = (bytes[0] << 8) | bytes[1];
-    hdr->flags[0] = bytes[2];
-    hdr->flags[1] = bytes[3];
-    hdr->nquestions = (bytes[4] << 8) | bytes[5]; // nquestions
-    hdr->nanswers = (bytes[6] << 8) | bytes[7]; // nanswers
-    hdr->nauthrr = (bytes[8] << 8) | bytes[9]; // nauthrr
-    hdr->nextrarr = (bytes[10] << 8) | bytes[11]; // nextrarr
 
-    MINIMR_DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
+//void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes) {
+//    hdr->transaction_id = (bytes[0] << 8) | bytes[1];
+//    hdr->flags[0] = bytes[2];
+//    hdr->flags[1] = bytes[3];
+//    hdr->nquestions = (bytes[4] << 8) | bytes[5]; // nquestions
+//    hdr->nanswers = (bytes[6] << 8) | bytes[7]; // nanswers
+//    hdr->nauthrr = (bytes[8] << 8) | bytes[9]; // nauthrr
+//    hdr->nextrarr = (bytes[10] << 8) | bytes[11]; // nextrarr
+//
+//    MINIMR_DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
+//}
+//
+//void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr) {
+//    bytes[0] = (hdr->transaction_id >> 8) & 0xff;
+//    bytes[1] = hdr->transaction_id & 0xff;
+//    bytes[2] = hdr->flags[0];
+//    bytes[3] = hdr->flags[1];
+//    bytes[4] = (hdr->nquestions >> 8) & 0xff;
+//    bytes[5] = hdr->nquestions & 0xff;
+//    bytes[6] = (hdr->nanswers >> 8) & 0xff;
+//    bytes[7] = hdr->nanswers & 0xff;
+//    bytes[8] = (hdr->nauthrr >> 8) & 0xff;
+//    bytes[9] = hdr->nauthrr & 0xff;
+//    bytes[10] = (hdr->nextrarr >> 8) & 0xff;
+//    bytes[11] = hdr->nextrarr & 0xff;
+//
+//    MINIMR_DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
+//}
+
+void minimr_dns_hdr_stdquery(uint8_t * dst, uint16_t nquestions, uint16_t nknownanswers)
+{
+    struct minimr_dns_hdr hdr;
+
+    hdr.transaction_id = 0;
+    hdr.flags[0] = MINIMR_DNS_HDR1_QR_QUERY; // 0x00
+    hdr.flags[0] = 0x00;
+    hdr.nquestions = nquestions;
+    hdr.nanswers = nknownanswers;
+    hdr.nauthrr = 0;
+    hdr.nextrarr = 0;
+
+    minimr_dns_hton_hdr(dst, &hdr);
 }
 
-void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr) {
-    bytes[0] = (hdr->transaction_id >> 8) & 0xff;
-    bytes[1] = hdr->transaction_id & 0xff;
-    bytes[2] = hdr->flags[0];
-    bytes[3] = hdr->flags[1];
-    bytes[4] = (hdr->nquestions >> 8) & 0xff;
-    bytes[5] = hdr->nquestions & 0xff;
-    bytes[6] = (hdr->nanswers >> 8) & 0xff;
-    bytes[7] = hdr->nanswers & 0xff;
-    bytes[8] = (hdr->nauthrr >> 8) & 0xff;
-    bytes[9] = hdr->nauthrr & 0xff;
-    bytes[10] = (hdr->nextrarr >> 8) & 0xff;
-    bytes[11] = hdr->nextrarr & 0xff;
+void minimr_dns_hdr_stdresponse(uint8_t * dst, uint16_t nrr, uint16_t nauthrr, uint16_t nextrarr)
+{
+    struct minimr_dns_hdr hdr;
 
-    MINIMR_DEBUGF("hdr\n id %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nquestions, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
+    hdr.transaction_id = 0;
+    hdr.flags[0] = MINIMR_DNS_HDR1_QR_QUERY; // 0x00
+    hdr.flags[0] = 0x00;
+    hdr.nquestions = 0;
+    hdr.nanswers = nrr;
+    hdr.nauthrr = nauthrr;
+    hdr.nextrarr = nextrarr;
+
+    minimr_dns_hton_hdr(dst, &hdr);
 }
 
 void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t marker)
@@ -62,6 +93,10 @@ void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t mark
     }
 }
 
+int8_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint8_t * msgname, uint8_t * msg, uint16_t msglen)
+{
+    return 0;
+}
 
 uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat * stat, uint8_t * msg, uint16_t * pos, uint16_t msglen)
 {
@@ -529,6 +564,322 @@ uint8_t minimr_handle_queries(
 }
 
 
+uint8_t minimr_handle_responses(
+        uint8_t *msg, uint16_t msglen,
+        uint8_t **filter_names, uint16_t nfilter_names,
+        minimr_response_handler handler, void * user_data
+)
+{
+    MINIMR_ASSERT(msg != NULL);
+    MINIMR_ASSERT(nfilter_names == 0 || filter_names != NULL);
+    MINIMR_ASSERT(handler != NULL);
+
+    MINIMR_DEBUGF("\nnew msg %p (len %d)\n", msg, msglen);
+
+    MINIMR_DEBUGF("msglen check\n");
+
+    // ignore messages that are not long enough to even have a complete header
+    if (msglen < MINIMR_DNS_HDR_SIZE){
+        return MINIMR_IGNORE;
+    }
+
+    struct minimr_dns_hdr hdr;
+
+    // read header info
+    minimr_dns_ntoh_hdr(&hdr, msg);
+
+
+    uint16_t nrr = hdr.nanswers + hdr.nauthrr + hdr.nextrarr;
+
+    // not a (standard) response? ignore
+    // or there are questions?!
+    // or no actual rrs??
+    if ( (hdr.flags[0] & MINIMR_DNS_HDR1_QR) != MINIMR_DNS_HDR1_QR_REPLY ||
+         hdr.nquestions > 0 ||
+         nrr == 0){
+        MINIMR_DEBUGF("is NOT standard response\n");
+        return MINIMR_IGNORE;
+    }
+    MINIMR_DEBUGF("is standard response\n");
+
+
+    uint16_t pos = MINIMR_DNS_HDR_SIZE;
+
+    MINIMR_DEBUGF("checking %d rr, %d authrr, %d extrarr\n", hdr.nanswers, hdr.nauthrr, hdr.nextrarr);
+
+    minimr_dns_rr_section section = minimr_dns_rr_section_answer;
+    uint16_t section_until = hdr.nanswers;
+
+    for(uint16_t ir = 0; ir < nrr && pos < msglen; ir++){
+
+        struct minimr_dns_rr_stat rstat;
+
+        uint8_t res = minimr_dns_extract_rr_stat(&rstat, msg, &pos, msglen);
+
+        // in case of a server fail, pass this along
+        if (res == MINIMR_DNS_HDR2_RCODE_SERVAIL) {
+            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+        }
+
+        if (res != MINIMR_OK){
+            // we could respond that it was a faulty query..
+            return MINIMR_DNS_HDR2_RCODE_FORMERR;
+        }
+
+        if (section == minimr_dns_rr_section_answer && ir > section_until){
+            section = minimr_dns_rr_section_authority;
+            section_until += hdr.nauthrr;
+        }
+        if (section == minimr_dns_rr_section_authority && ir > section_until){
+            section = minimr_dns_rr_section_extra;
+        }
+
+        uint8_t cont = MINIMR_CONTINUE;
+
+        // if any filter records were given, just look for these
+        if (nfilter_names > 0){
+            for (uint16_t i = 0; i < nfilter_names; i++){
+
+                if (minimr_dns_name_cmp(filter_names[i], &msg[rstat.name_offset], msg, msglen) == 0){
+                    // pass to user rr handler
+                    cont = handler(section, &rstat, msg, msglen, user_data);
+                }
+            }
+        } else {
+            // pass to user rr handler
+            cont = handler(section, &rstat, msg, msglen, user_data);
+        }
+
+        if (cont != MINIMR_CONTINUE){
+            break;
+        }
+    }
+
+
+    return MINIMR_OK;
+}
+
+
+uint8_t minimr_handle_probing_messages(
+        uint8_t *msg, uint16_t msglen,
+        struct minimr_dns_query_stat qstats[], uint16_t nqstats,
+        uint8_t **filter_names, uint16_t nfilter_names,
+        minimr_response_handler handler, void * user_data
+)
+{
+
+    MINIMR_ASSERT(msg != NULL);
+    MINIMR_ASSERT(qstats != NULL);
+    MINIMR_ASSERT(nqstats > 0);
+    MINIMR_ASSERT(filter_names != NULL);
+    MINIMR_ASSERT(nfilter_names > 0 );
+    MINIMR_ASSERT(handler != NULL);
+
+    MINIMR_DEBUGF("\nnew msg %p (len %d)\n", msg, msglen);
+
+    MINIMR_DEBUGF("msglen check\n");
+
+    // ignore messages that are not long enough to even have a complete header
+    if (msglen < MINIMR_DNS_HDR_SIZE){
+        return MINIMR_IGNORE;
+    }
+
+    struct minimr_dns_hdr hdr;
+
+    // read header info
+    minimr_dns_ntoh_hdr(&hdr, msg);
+
+    // ignore questions that do not contain questions..
+    if ( ((hdr.flags[0] & MINIMR_DNS_HDR1_QR) != MINIMR_DNS_HDR1_QR_QUERY) && hdr.nquestions == 0){
+        return MINIMR_OK;
+    }
+
+    uint16_t pos = MINIMR_DNS_HDR_SIZE;
+    uint16_t nq = 0;
+
+    MINIMR_DEBUGF("checking %d questions\n", hdr.nquestions);
+
+    // note all relevant questions for us
+    // stored in stats as 0 - nq
+    for(uint16_t iq = 0; iq < hdr.nquestions && nq < nqstats && pos < msglen; iq++){
+
+        uint8_t res = minimr_dns_extract_query_stat(&qstats[nq], msg, &pos, msglen);
+
+        // in case of a server fail, pass this along
+        if (res == MINIMR_DNS_HDR2_RCODE_SERVAIL) {
+            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+        }
+
+        if (res != MINIMR_OK){
+            // we could respond that it was a faulty query..
+            return MINIMR_DNS_HDR2_RCODE_FORMERR;
+        }
+
+        MINIMR_DEBUGF("comparing question %d with %d records\n", iq, nfilter_names);
+
+        for(uint16_t ir = 0; ir < nfilter_names; ir++){
+
+
+
+
+            // so it's a match and we might consider responding
+            // but let's remember this question and the matching record and let's go to the next question
+
+            qstats[nq].relevant = 1;
+            qstats[nq].ir = ir;
+
+            nq++;
+
+            MINIMR_DEBUGF("question %d matches record %d\n", iq, ir);
+
+            break;
+        }
+
+    }
+
+    MINIMR_DEBUGF("got %d relevant questions\n", nq);
+
+    // no questions we need to answer
+    if (nq == 0){
+        return MINIMR_IGNORE;
+    }
+
+    // init to false;
+    uint8_t unicast_req = 0;
+
+    MINIMR_DEBUGF("checking known answers\n");
+
+    // note how many questions we actually have to answer
+    // (can change after checking the known answers)
+    uint16_t remaining_nq = nq;
+
+    // now check all known answers
+    if (hdr.nanswers > 0){
+
+        for(uint16_t ia = 0; ia < hdr.nanswers && nq < nqstats && pos < msglen; ia++){
+
+            struct minimr_dns_rr_stat rstat;
+
+            uint8_t res = minimr_dns_extract_rr_stat(&rstat, msg, &pos, msglen);
+
+            // in case of a server fail, pass this along
+            if (res == MINIMR_DNS_HDR2_RCODE_SERVAIL) {
+                return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+            }
+
+            if (res != MINIMR_OK){
+                // we could respond that it was a faulty query..
+                return MINIMR_DNS_HDR2_RCODE_FORMERR;
+            }
+
+            // check if the known answer relates to any of the relevant questions
+
+            for(uint16_t iq = 0; iq < nq; iq++){
+
+                // same type?
+                if (rstat.type != qstats[iq].type) continue;
+
+                // same class?
+                if ((rstat.cache_class & MINIMR_DNS_RRCLASS) != (qstats[iq].unicast_class & MINIMR_DNS_QCLASS) ) continue;
+
+
+                // only check name if name offsets do not match
+                if (rstat.name_offset != qstats[iq].name_offset){
+
+                    // if name lengths don't match, there's no point checking names
+                    if (rstat.name_length != qstats[iq].name_length) continue;
+
+                    uint8_t found = 0;
+
+                    // pretty much a reverse memcmp of the name
+                    for(int32_t i = rstat.name_length - 1; found == 0 && i > 0; i--){
+                        uint8_t * rname = &msg[rstat.name_offset];
+                        uint8_t * qname = &msg[qstats[iq].name_offset];
+                        if (qname[i] != qname[i]){
+                            found = 1;
+                        }
+                    }
+
+                    if (found == 0) continue;
+                }
+
+                // so it's a match and we have to check wether it's up to date
+                struct minimr_dns_rr * rr = records[qstats[iq].ir];
+                if (rr->fun(minimr_dns_rr_fun_type_respond_to, rr, &rstat, msg) == MINIMR_DO_NOT_RESPOND){
+                    qstats[iq].relevant = 0;
+                    remaining_nq--;
+                } else if ((qstats[iq].unicast_class & MINIMR_DNS_QUNICAST) == MINIMR_DNS_QUNICAST) {
+                    unicast_req = 1;
+                }
+
+                break;
+            }
+
+        }
+
+        // msg seems to be faulty, stop processing
+        if (pos >= msglen){
+            return MINIMR_DNS_HDR2_RCODE_FORMERR;
+        }
+    }
+
+
+
+    MINIMR_DEBUGF("checking %d rr, %d authrr, %d extrarr\n", hdr.nanswers, hdr.nauthrr, hdr.nextrarr);
+
+    uint16_t nrr = hdr.nanswers + hdr.nauthrr + hdr.nextrarr;
+
+    minimr_dns_rr_section section = minimr_dns_rr_section_answer;
+    uint16_t section_until = hdr.nanswers;
+
+    for(uint16_t ir = 0; ir < nrr && pos < msglen; ir++){
+
+        struct minimr_dns_rr_stat rstat;
+
+        uint8_t res = minimr_dns_extract_rr_stat(&rstat, msg, &pos, msglen);
+
+        // in case of a server fail, pass this along
+        if (res == MINIMR_DNS_HDR2_RCODE_SERVAIL) {
+            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+        }
+
+        if (res != MINIMR_OK){
+            // we could respond that it was a faulty query..
+            return MINIMR_DNS_HDR2_RCODE_FORMERR;
+        }
+
+        if (section == minimr_dns_rr_section_answer && ir > section_until){
+            section = minimr_dns_rr_section_authority;
+            section_until += hdr.nauthrr;
+        }
+        if (section == minimr_dns_rr_section_authority && ir > section_until){
+            section = minimr_dns_rr_section_extra;
+        }
+
+        uint8_t cont = MINIMR_CONTINUE;
+
+        // if any filter records were given, just look for these
+        if (nfilter_names > 0){
+            for (uint16_t i = 0; i < nfilter_names; i++){
+
+                if (minimr_dns_name_cmp(filter_names[i], &msg[rstat.name_offset], msg, msglen) == 0){
+                    // pass to user rr handler
+                   cont  = handler(section, &rstat, msg, msglen, user_data);
+                }
+            }
+        } else {
+            // pass to user rr handler
+            cont = handler(section, &rstat, msg, msglen, user_data);
+        }
+
+        if (cont != MINIMR_CONTINUE){
+            break;
+        }
+    }
+
+    return MINIMR_OK;
+}
+
 uint8_t minimr_announce(
     struct minimr_dns_rr **records, uint16_t nrecords,
     uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
@@ -565,49 +916,6 @@ uint8_t minimr_announce(
 
     MINIMR_DEBUGF("added %d answer rr\n", nanswers);
 
-    // add all authority RRs
-    uint16_t nauthrr = 0;
-    for(uint16_t i = 0; i < nrecords; i++){
-
-        if (records[i] != NULL){
-            continue;
-        }
-
-        uint16_t nrr = 0;
-
-        uint8_t res = records[i]->fun(minimr_dns_rr_fun_type_get_authority_rrs, records[i], outmsg, &outlen, outmsgmaxlen, &nrr);
-
-        if (res != MINIMR_OK){
-            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
-        }
-
-        nauthrr += nrr;
-    }
-
-    MINIMR_DEBUGF("added %d authority rr\n", nauthrr);
-
-    // add all additional RRs
-    uint16_t nextrarr = 0;
-    for(uint16_t i = 0; i < nrecords; i++){
-
-        if (records[i] != NULL){
-            continue;
-        }
-
-        uint16_t nrr = 0;
-
-        uint8_t res = records[i]->fun(minimr_dns_rr_fun_type_get_authority_rrs, records[i], outmsg, &outlen, outmsgmaxlen, &nrr);
-
-        if (res != MINIMR_OK){
-            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
-        }
-
-        nextrarr += nrr;
-    }
-
-
-    MINIMR_DEBUGF("added %d extra rr\n", nextrarr);
-
     // prepare outheader and out sanity check
     struct minimr_dns_hdr outhdr;
 
@@ -619,8 +927,8 @@ uint8_t minimr_announce(
 
     outhdr.nquestions = 0;
     outhdr.nanswers = nanswers;
-    outhdr.nauthrr = nauthrr;
-    outhdr.nextrarr = nextrarr;
+    outhdr.nauthrr = 0;
+    outhdr.nextrarr = 0;
 
     // add header
     minimr_dns_hton_hdr(outmsg, &outhdr);
@@ -644,6 +952,7 @@ uint8_t minimr_terminate(
     }
     return minimr_announce(records, nrecords, outmsg, outmsglen, outmsgmaxlen);
 }
+
 
 uint8_t minimr_dns_query(
         struct minimr_dns_rr **records, uint16_t nrecords,

@@ -93,11 +93,17 @@ extern "C" {
 #define MINIMR_BUFFER_OVERFLOW  0xfd
 
 
-#define MINIMR_OK           0
-#define MINIMR_NOT_OK       1
+#define MINIMR_OK               0
+#define MINIMR_NOT_OK           1
 
 #define MINIMR_RESPOND          2
 #define MINIMR_DO_NOT_RESPOND   3
+
+#define MINIMR_CONTINUE         0
+#define MINIMR_ABORT            1
+
+#define MINIMR_DNS_PROBE_BOOTUP_DELAY_MS    250
+#define MINIMR_DNS_PROBE_WAIT_MS            250
 
 
 #define MINIMR_DNS_HDR_SIZE 12
@@ -114,6 +120,8 @@ extern "C" {
 
 #define MINIMR_DNS_HDR1_QR_QUERY        0x00
 #define MINIMR_DNS_HDR1_QR_REPLY        0x80
+
+#define MINIMR_DNS_IS_QUERY(__msg__) ( ((__msg__)[3] & MINIMR_DNS_HDR1_QR) == MINIMR_DNS_HDR1_QR_QUERY )
 
 // Multicast DNS shall set the OPCODE field to 0
 #define MINIMR_DNS_HDR1_OPCODE_QUERY    0x00    // standard query (0)
@@ -475,18 +483,49 @@ typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr
     MINIMR_DNS_RR_WRITE_TXT_BODY(__rr_ptr__, __var_msg__, __var_len__, __var_txt__, __txt_len__)
 
 
-#define MINIMR_DNS_Q_WRITE(__rr_ptr__,  __var_msg__, __var_len__, __unicast_requested__) \
-    for(uint16_t i = 0; i < (__rr_ptr__)->name_length; i++){ (__var_msg__)[(__var_len__)+i] = (__rr_ptr__)->name[i]; } \
-    (__var_len__) += (__rr_ptr__)->name_length; \
-    (__var_msg__)[(__var_len__)++] = ((__rr_ptr__)->type >> 8) & 0xff; \
-    (__var_msg__)[(__var_len__)++] = (__rr_ptr__)->type & 0xff; \
-    (__var_msg__)[(__var_len__)++] = ((__rr_ptr__)->cache_class | ((__unicast_requested__) & MINIMR_DNS_QUNICAST) >> 8) & 0xff; \
-    (__var_msg__)[(__var_len__)++] = (__rr_ptr__)->cache_class & 0xff;
+#define MINIMR_DNS_Q_WRITE( __var_msg__, __var_len__, __name__, __namelen__, __type__, __class__, __unicast_requested__) \
+    for(uint16_t i = 0; i < (__namelen__); i++){ (__var_msg__)[(__var_len__)+i] = (__name__)[i]; } \
+    (__var_len__) += (__namelen__); \
+    (__var_msg__)[(__var_len__)++] = ((__type__) >> 8) & 0xff; \
+    (__var_msg__)[(__var_len__)++] = (__type__) & 0xff; \
+    (__var_msg__)[(__var_len__)++] = ((__class__) | ((__unicast_requested__) & MINIMR_DNS_QUNICAST) >> 8) & 0xff; \
+    (__var_msg__)[(__var_len__)++] = (__class__) & 0xff;
 
+#define MINIMR_DNS_HDR_WRITE(__dst__, __tid__, __flag1__, __flag2__, __nq__, __nrr__, __nauthrr__, __nextrarr__) \
+    (__dst__)[0] = ((__tid__) >> 8) & 0xff; \
+    (__dst__)[1] = (__tid__) & 0xff; \
+    (__dst__)[2] = __flag1__; \
+    (__dst__)[3] = __flag2__; \
+    (__dst__)[4] = ((__nq__) >> 8) & 0xff; \
+    (__dst__)[5] = (__nq__) & 0xff; \
+    (__dst__)[6] = ((__nrr__) >> 8) & 0xff; \
+    (__dst__)[7] = (__nrr__) & 0xff; \
+    (__dst__)[8] = ((__nauthrr__) >> 8) & 0xff; \
+    (__dst__)[9] = (__nauthrr__) & 0xff; \
+    (__dst__)[10] = ((__nextrarr__) >> 8) & 0xff; \
+    (__dst__)[11] = (__nextrarr__) & 0xff;
 
-void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes);
-void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr);
+#define MINIMR_DNS_HDR_WRITE_PROBEQUERY(__dst__, __nq__, __nauthrr__)               MINIMR_DNS_HDR_WRITE(__dst__, MINIMR_DNS_HDR1_QR_QUERY, 0, 0, __nq__, 0, __nauthrr__, 0)
+#define MINIMR_DNS_HDR_WRITE_STDQUERY(__dst__, __nq__, __nknownanswers__)               MINIMR_DNS_HDR_WRITE(__dst__, MINIMR_DNS_HDR1_QR_QUERY, 0, 0, __nq__, __nknownanswers__, 0, 0)
+#define MINIMR_DNS_HDR_WRITE_STDRESPONSE(__dst__, __nrr__, __nextrarr__)   MINIMR_DNS_HDR_WRITE(__dst__, MINIMR_DNS_HDR1_QR_REPLY,  MINIMR_DNS_HDR1_AA, 0, 0, __nrr__, 0, __nextrarr__ )
 
+#define MINIMR_DNS_HDR_READ(__src__, __tid__, __flag1__, __flag2__, __nq__, __nrr__, __nauthrr__, __nextrarr__) \
+    (__tid__) = ((__src__)[0] << 8) | (__src__)[1]; \
+    (__flag1__) = (__src__)[2]; \
+    (__flag2__) = (__src__)[3]; \
+    (__nq__) = ((__src__)[4] << 8) | (__src__)[5]; \
+    (__nrr__) = ((__src__)[6] << 8) | (__src__)[7]; \
+    (__nauthrr__) = ((__src__)[8] << 8) | (__src__)[9]; \
+    (__nextrarr__) = ((__src__)[10] << 8) | (__src__)[11];
+
+#define minimr_dns_ntoh_hdr(__hdr__, __src__) MINIMR_DNS_HDR_READ(__src__, (__hdr__)->transaction_id, (__hdr__)->flags[0], (__hdr__)->flags[1], (__hdr__)->nquestions, (__hdr__)->nanswers, (__hdr__)->nauthrr, (__hdr__)->nextrarr)
+#define minimr_dns_hton_hdr(__dst__, __hdr__) MINIMR_DNS_HDR_WRITE(__dst__, (__hdr__)->transaction_id, (__hdr__)->flags[0], (__hdr__)->flags[1], (__hdr__)->nquestions, (__hdr__)->nanswers, (__hdr__)->nauthrr, (__hdr__)->nextrarr)
+
+//void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes);
+//void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr);
+
+//void minimr_dns_hdr_stdquery(uint8_t * dst, uint16_t nquestions, uint16_t nknownanswers);
+//void minimr_dns_hdr_stdresponse(uint8_t * dst, uint16_t nrr, uint16_t nauthrr, uint16_t nextrarr);
 
 void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t marker);
 
@@ -499,23 +538,45 @@ void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t mark
         if (length != NULL) (*(length))--; \
     } while(0);
 
+int8_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint8_t * msgname, uint8_t * msg, uint16_t msglen);
+
 uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
 
 uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
 
 uint8_t minimr_handle_queries(
     uint8_t *msg, uint16_t msglen,
-    struct minimr_dns_query_stat stats[], uint16_t nqstats,
+    struct minimr_dns_query_stat qstats[], uint16_t nqstats,
     struct minimr_dns_rr **records, uint16_t nrecords,
     uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
     uint8_t *unicast_requested
+);
+
+typedef enum  {
+    minimr_dns_rr_section_answer,
+    minimr_dns_rr_section_authority,
+    minimr_dns_rr_section_extra
+} minimr_dns_rr_section;
+
+typedef uint8_t (*minimr_response_handler)(minimr_dns_rr_section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data);
+
+uint8_t minimr_handle_responses(
+    uint8_t *msg, uint16_t msglen,
+    uint8_t **filter_names, uint16_t nfilter_names,
+    minimr_response_handler handler, void * user_data
+);
+
+uint8_t minimr_handle_probing_messages(
+    uint8_t *msg, uint16_t msglen,
+    struct minimr_dns_query_stat qstats[], uint16_t nqstats,
+    uint8_t **filter_names, uint16_t nfilter_names,
+    minimr_response_handler handler, void * user_data
 );
 
 uint8_t minimr_announce(
     struct minimr_dns_rr **records, uint16_t nrecords,
     uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
 );
-
 
 uint8_t minimr_terminate(
         struct minimr_dns_rr **records, uint16_t nrecords,

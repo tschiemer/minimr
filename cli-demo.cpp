@@ -5,10 +5,18 @@
 #include <cassert>
 #include <stdarg.h>
 #include <chrono>
+#include <thread>
 
 using namespace std;
 
+
 /***** basic config *****/
+
+// Our records are unique and we do not require probing
+#define RECORDS_ARE_UNIQUE 0
+
+// should be a value between 2 - 8
+#define NUMBER_OF_ANNOUNCEMENTS 2
 
 // limits the number of questions we can actually answer
 // likely this can be identical to your number of RRs
@@ -44,6 +52,9 @@ using namespace std;
 
 /***** types *****/
 
+typedef enum { Unicast, Multicast } UnicastMulticast;
+typedef void * my_socket_or_ipaddr_type;
+
 // it can be nice and helpful to actually typedef any RRs instead of using them as anonymous structs (as done below)
 // this would be helpful when casting types (and would eliminate the need of the field getter macros that make assumptions about the underlying memory layout)
 // this example shows in particular how to add any custom fields
@@ -58,7 +69,9 @@ MINIMR_DNS_RR_TYPE_END()
 Custom_PTR_RR;
 
 typedef enum {
-    State_Probing,
+    State_ProbingQuery,
+    State_ProbingAwaitAnswers,
+    State_Announce,
     State_Responding,
     State_TieBreaking
 } State;
@@ -75,8 +88,8 @@ static int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns
 
 
 // dummy functions
-static uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen);
-static void send_udp_packet(uint8_t * payload, uint16_t len);
+static uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen, my_socket_or_ipaddr_type from_addr);
+static void send_udp_packet(uint8_t * payload, uint16_t len, UnicastMulticast um, ...);
 
 /***** local variables *****/
 
@@ -138,7 +151,7 @@ static MINIMR_DNS_RR_TYPE_TXT(sizeof(RR_TXT_NAME), sizeof(RR_TXT_DATA)) RR_TXT =
 };
 
 // isn't this much nicer?
-static Custom_PTR_RR RR_CUSTOM = {
+static Custom_PTR_RR RR_PTR_CUSTOM = {
     .type = MINIMR_DNS_TYPE_PTR,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
@@ -162,7 +175,7 @@ static  struct minimr_dns_rr * records[] = {
     (struct minimr_dns_rr *)&RR_SRV,
     (struct minimr_dns_rr *)&RR_TXT,
     NULL, // will be skipped (handy when you want to dynamically de-/activate records
-    (struct minimr_dns_rr *)&RR_CUSTOM,
+    (struct minimr_dns_rr *)&RR_PTR_CUSTOM,
 };
 
 static uint16_t NRECORDS = sizeof(records) / sizeof(struct minimr_dns_rr *);
@@ -260,7 +273,9 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
         }
 
         *outmsglen = l;
-        *nrr = 1;
+        if (nrr != NULL){
+            *nrr = 1;
+        }
 
         MINIMR_DEBUGF("added %d RRs (totlen %d)\n", 1, l);
 
@@ -322,7 +337,9 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
                     MINIMR_DNS_RR_WRITE_TXT_BODY(extra, outmsg, l, MINIMR_DNS_RR_TXT_GET_TXT_PTR(extra), *MINIMR_DNS_RR_TXT_GET_TXTLEN_PTR(extra))
                 }
 
-                *nrr += 1;
+                if (nrr != NULL){
+                    *nrr += 1;
+                }
             }
 
             *outmsglen = l;
@@ -345,9 +362,10 @@ int generic_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * 
         uint16_t l = *outmsglen;
 
         // queries always look the same, independent of type
-        MINIMR_DNS_Q_WRITE(rr, outmsg, l, unicast_requested)
-
-        *nrr += 1;
+        MINIMR_DNS_Q_WRITE(outmsg, l, rr->name, rr->name_length, rr->type, rr->cache_class, unicast_requested);
+        if (nrr != NULL){
+            *nrr += 1;
+        }
 
         *outmsglen = l;
 
@@ -369,12 +387,12 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
     MINIMR_ASSERT(type == minimr_dns_rr_fun_type_respond_to || type == minimr_dns_rr_fun_type_get_answer_rrs || type == minimr_dns_rr_fun_type_get_authority_rrs || type == minimr_dns_rr_fun_type_get_additional_rrs);
 
     // as this handler has only been assigned to our custom RR this MUST be true
-    MINIMR_ASSERT( rr == (struct minimr_dns_rr *)&RR_CUSTOM );
+    MINIMR_ASSERT( rr == (struct minimr_dns_rr *)&RR_PTR_CUSTOM );
 
     Custom_PTR_RR * custom_rr = (Custom_PTR_RR*)rr;
 
     if (type == minimr_dns_rr_fun_type_respond_to){
-        
+
         // TODO check if is up-to-date, wrong or whatever?
 
         #if MINIMR_TIMESTAMP_USE
@@ -428,6 +446,10 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
         MINIMR_DEBUGF("added %d RRs (totlen %d)\n", 1, l);
 
+        if (nrr != NULL){
+            *nrr = 1;
+        }
+
         return MINIMR_OK;
     }
 
@@ -440,11 +462,13 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
         MINIMR_DNS_RR_WRITE_A(custom_rr->rr_a, outmsg, l, MINIMR_DNS_RR_A_GET_IPv4_PTR(custom_rr->rr_a))
 
-        MINIMR_DNS_RR_WRITE_AAAA(custom_rr->rr_a, outmsg, l, MINIMR_DNS_RR_A_GET_IPv4_PTR(custom_rr->rr_a))
+        MINIMR_DNS_RR_WRITE_AAAA(custom_rr->rr_aaaa, outmsg, l, MINIMR_DNS_RR_A_GET_IPv4_PTR(custom_rr->rr_aaaa))
 
         MINIMR_DNS_RR_WRITE_TXT(custom_rr->rr_txt, outmsg, l, MINIMR_DNS_RR_TXT_GET_TXT_PTR(custom_rr->rr_txt), *MINIMR_DNS_RR_TXT_GET_TXTLEN_PTR(custom_rr->rr_txt))
 
-        *nrr += 3;
+        if (nrr != NULL){
+            *nrr = 3;
+        }
 
     }
 
@@ -461,28 +485,44 @@ int custom_rr_handler(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr * r
 
 /* other functions */
 
-uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen){
+
+uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen, my_socket_or_ipaddr_type from_addr)
+{
 
     MINIMR_ASSERT(payload != NULL);
     MINIMR_ASSERT(maxlen > 0);
+
+    // from_addr is not really used
 
     size_t r = fread(payload, sizeof(uint8_t), maxlen, stdin);
 
     return r;
 }
 
-void send_udp_packet(uint8_t * payload, uint16_t len){
+void send_udp_packet(uint8_t * payload, uint16_t len, UnicastMulticast um, ...)
+{
 
     if (len == 0){
         return;
     }
 
+    static volatile bool mutex = false;
+
+    while(mutex){
+        this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    mutex = true;
+
+    // we pretty much ignore the unicast (and to_addr) option - it's intended to make its use clear
 
     fwrite(payload, sizeof(uint8_t), len, stdout);
     fflush(stdout);
+
+    mutex = false;
 }
 
-int main() {
+int main()
+{
 
     // properly initialize records
     for (int i = 0; i < NRECORDS; i++){
@@ -505,35 +545,163 @@ int main() {
 
     struct minimr_dns_query_stat qstats[NQSTATS];
 
-    State state = State_Probing;
+    volatile State state = RECORDS_ARE_UNIQUE ? State_Announce : State_ProbingQuery;
+
+    uint8_t nprobe = 0;
+
+    my_socket_or_ipaddr_type from_addr;
+
+    uint8_t in[2048];
+    uint16_t inlen = 0;
+    uint8_t out[2048];
+    uint16_t outlen = 0;
 
     while(!feof(stdin)){
 
-        uint8_t in[2048];
-        uint16_t inlen = 0;
 
-        inlen = receive_udp_packet(in, sizeof(in));
+        #if RECORDS_ARE_UNIQUE == 0
+        if (state == State_ProbingQuery){
 
-        if (inlen == 0){
+            outlen = MINIMR_DNS_HDR_SIZE;
+
+            uint16_t nq = 3;
+            uint16_t nrr_wishlist = 0;
+
+            MINIMR_DNS_HDR_WRITE_PROBEQUERY(out, nq, nrr_wishlist);
+//
+            uint8_t unicast_requested = 1;
+
+            // our questions (only one of A/AAAA and service related records TXT/SRV needed, using ANY qtype)
+            MINIMR_DNS_Q_WRITE(out, outlen, RR_A.name, RR_A.name_length, MINIMR_DNS_TYPE_ANY, MINIMR_DNS_CLASS_IN, unicast_requested);
+            MINIMR_DNS_Q_WRITE(out, outlen, RR_SRV.name, RR_SRV.name_length, MINIMR_DNS_TYPE_ANY, MINIMR_DNS_CLASS_IN, unicast_requested);
+
+            // our record wishlist which will be added to the authrr section
+
+            // different ways of writing a record
+            RR_A.fun(minimr_dns_rr_fun_type_get_answer_rrs, (struct minimr_dns_rr*)&RR_A, out, outlen, sizeof(out), NULL);
+            RR_AAAA.fun(minimr_dns_rr_fun_type_get_answer_rrs, (struct minimr_dns_rr*)&RR_AAAA, out, outlen, sizeof(out), NULL);
+            generic_rr_handler(minimr_dns_rr_fun_type_get_answer_rrs, (struct minimr_dns_rr*)&RR_TXT, out, outlen, sizeof(out), NULL);
+            MINIMR_DNS_RR_WRITE_SRV(&RR_SRV, out, outlen, RR_SRV.priority, RR_SRV.weight, RR_SRV.port, RR_SRV.target, RR_SRV.target_length);
+
+            // if is first probe wait random time between 0 - 250 ms
+            if (nprobe == 0){
+                std::this_thread::sleep_for(std::chrono::milliseconds((rand() % MINIMR_DNS_PROBE_BOOTUP_DELAY_MS)));
+            }
+
+            nprobe++;
+
+            state = State_ProbingAwaitAnswers;
+
+            std::thread([&state, &nprobe](){
+                std::this_thread::sleep_for(std::chrono::milliseconds(MINIMR_DNS_PROBE_WAIT_MS));
+
+                if (state != State_ProbingAwaitAnswers){
+                    return;
+                }
+
+                if (nprobe < 3){
+                    state = State_ProbingQuery;
+                } else {
+                    state = State_Announce;
+                }
+            });
+
+            send_udp_packet(out, outlen, Multicast, from_addr);
+
             continue;
         }
 
-        uint8_t out[2048];
-        uint16_t outlen = 0;
+        if (state == State_ProbingAwaitAnswers){
 
-        uint8_t unicast_requested;
+            // we're hoping (not) to be receiving messages
+            inlen = receive_udp_packet(in, sizeof(in), from_addr);
 
-        if (state == State_Probing){
+            // don't bother about messages that obviously have no meaningful content
+            if (inlen < MINIMR_DNS_HDR_SIZE){
+                // just some waiting for responses
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+                continue;
+            }
+
+
+            // the records names we're actually looking for (these should be in proper format)
+            static uint8_t * filter_names[] = {
+                    RR_A.name,
+                    RR_SRV.name
+            };
+            static uint16_t nfilter_names = sizeof(filter_names) / sizeof(uint8_t *);
+
+            minimr_handle_probing_messages(in, inlen, filter_names, nfilter_names, [](minimr_dns_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * from_addr) -> uint8_t {
+
+                // if it is a query and contains
+                if (MINIMR_DNS_IS_QUERY(msg)){
+                    if (section == minimr_dns_rr_section_answer){
+
+                    }
+
+                } else { // is response
+                    MINIMR_DEBUGF("our records are already taken!\n");
+
+                    exit(EXIT_FAILURE);
+                }
+
+                return MINIMR_CONTINUE;
+            }, &from_addr);
 
         }
+        #endif // RECORDS_ARE_UNIQUE == 0
 
-        if (state == State_TieBreaking){
-            // TODO
+        if (state == State_Announce){
+
+            // delegate announcement to other thread
+            // our responder should not be blocked while multiple announcements occur
+            std::thread([](){
+
+                uint8_t out[2048];
+                uint16_t outlen = 0;
+
+                minimr_announce(records, NRECORDS, out, &outlen, sizeof(out));
+
+                MINIMR_ASSERT(outlen > MINIMR_DNS_HDR_SIZE);
+
+                send_udp_packet(out, outlen, Multicast);
+
+                int delay_s = 1;
+
+                for (int i = 0; i < NUMBER_OF_ANNOUNCEMENTS; i++){
+
+                    // wait N second before announcing a second time (which we MUST or should)
+                    std::this_thread::sleep_for(std::chrono::seconds(delay_s));
+
+                    send_udp_packet(out, outlen, Multicast);
+
+                    delay_s *= 2; // increase by at least a factor of 2
+
+                }
+            });
+
+            state = State_Responding;
         }
+
 
         if (state == State_Responding){
 
+
+            // now just wait for incoming messages
+            inlen = receive_udp_packet(in, sizeof(in), from_addr);
+
+            if (inlen == 0){
+                // just some waiting for responses
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+                continue;
+            }
+
+            uint8_t unicast_requested;
+
             uint8_t res = minimr_handle_queries(in, inlen, qstats, NQSTATS, records, NRECORDS, out, &outlen, sizeof(out), &unicast_requested);
+
 
             if (res == MINIMR_IGNORE){
                 // it's not a message we should bother about
@@ -557,16 +725,17 @@ int main() {
 
             if (res != MINIMR_DNS_HDR2_RCODE_NOERROR){
                 // just a last test for safety
-                MINIMR_DEBUGF("other error!\n");
+                MINIMR_DEBUGF("other error %d!\n", res);
                 continue;
             }
 
             MINIMR_DEBUGF("MINIMR_DNS_HDR2_RCODE_NOERROR\n");
+
+            if (outlen > 0){
+                send_udp_packet(out, outlen, unicast_requested ? Unicast : Multicast, from_addr);
+            }
         }
 
-        if (outlen > 0){
-            send_udp_packet(out, outlen);
-        }
 
     }
 
