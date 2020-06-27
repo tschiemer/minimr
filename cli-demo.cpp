@@ -67,10 +67,10 @@ typedef enum {
     State_Init,
     State_ProbingQuery,
     State_ProbingAwaitAnswers,
+    State_ProbingLostTie,
     State_Reconfigure,
     State_Announce,
-    State_Responding,
-    State_TieBreaking
+    State_Responding
 } State;
 
 /***** function signatures *****/
@@ -640,12 +640,24 @@ int main()
             };
             static uint16_t nfilter_names = sizeof(filter_names) / sizeof(uint8_t *);
 
-            static uint8_t service_conflict;
-            static uint8_t service_lexcmp[2];
-            static uint8_t service_nlexcmp;
+            static bool has_conflict;
+            static struct {
+                struct minimr_dns_rr * rr;
+                uint8_t present;
+                int8_t lexcmp;
+            } ties[4] = {
+                    {.rr = (struct minimr_dns_rr *)&RR_A},
+                    {.rr = (struct minimr_dns_rr *)&RR_AAAA},
+                    {.rr = (struct minimr_dns_rr *)&RR_TXT},
+                    {.rr = (struct minimr_dns_rr *)&RR_SRV},
+            };
 
-            service_conflict = 0;
-            service_nlexcmp = 0;
+            static int nties = 4;
+
+            has_conflict = false;
+            for(int i = 0; i < nties; i++){
+                ties[i].present = 0;
+            }
 
             static auto rrhandler = [](minimr_dns_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * from_addr) -> uint8_t {
 
@@ -654,59 +666,30 @@ int main()
 
                     if (section == minimr_dns_rr_section_authority){
 
-                        uint8_t * matched = filter_names[ifilter];
-
-
-                        // if matched our A record
-                        if (ifilter == 0){
-
-                            int lo = minimr_dns_rr_lexcmp(RR_A.cache_class, RR_A.type, RR_A.ipv4, sizeof(RR_A.ipv4), rstat->cache_class, rstat->type, &msg[rstat->data_offset], rstat->dlength);
-
-                            if (lo > 0){ // our data is lexicographically before the other data, so we lose
-                                // we win, don't do anything
-
-                                return MINIMR_CONTINUE;
-                            } else {
-                                // we lose..
-                                // unless the other probing device doesn't use the given hostname, it's somewhat pointless to check anything else.
-                                // let's be negative and just reconfigure
-
-                                state = State_Reconfigure;
-
-                                return MINIMR_ABORT;
+                        int i = 0;
+                        for(; i < nties; i++) {
+                            if (ties[i].rr->type == rstat->type){
+                                break;
                             }
-
-                        } else { // matched our service record
-
-                            // well, according to RFC6762 section 8.2.1 about probe tiebreaking of multiple records (SRV + TXT) records are ment to be sorted in order
-                            // but we can not expect other hosts to send their records in this order (although it makes sense to do so)
-                            // but... instead of doing all of this, why not just reconfigure?
-
-//                            state = State_Reconfigure;
-//                            return MINIMR_ABORT;
-
-
-                            if (rstat->type == MINIMR_DNS_TYPE_TXT){
-                                service_lexcmp[0] =minimr_dns_rr_lexcmp(RR_TXT.cache_class, RR_TXT.type, RR_TXT.txt, RR_TXT.txt_length, rstat->cache_class, rstat->type, &msg[rstat->data_offset], rstat->dlength);
-                                // TXT comes before SRV, so if we lose TXT anything else is irrelevant
-                                if (service_lexcmp[0] < 1 || (service_nlexcmp == 1 && service_lexcmp[1] < 1)){
-                                    state = State_Reconfigure;
-                                    return MINIMR_ABORT;
-                                }
-                                service_nlexcmp += 1;
-                                service_conflict = true;
-                            }
-                            if (rstat->type == MINIMR_DNS_TYPE_SRV){
-                                // well, the lexographical comparator, doesn't necessarily work on our fancy RR_SRV type, because it uses fields and not a raw data field..
-                                // so we can't use the lexicographical comparator ...
-
-                                MINIMR_DEBUGF("uh oh!\n");
-
-                                exit(EXIT_FAILURE);
-                            }
-
-
                         }
+
+                        if (i >= nties) {
+                            return MINIMR_CONTINUE;
+                        }
+
+                        has_conflict = true;
+
+                        // I'm sure there are ways to make this in a more elegant way..
+                        uint8_t tmp[512];
+                        uint16_t tmplen = 0;
+
+                        ties[i].rr->fun(minimr_dns_rr_fun_type_get_answer_rrs, ties[i].rr, tmp, &tmplen, sizeof(tmp), NULL);
+
+                        struct minimr_dns_rr_stat tmprstat;
+
+                        minimr_dns_extract_rr_stat(&tmprstat, tmp, &tmplen, sizeof(tmp));
+
+                        ties[i].lexcmp = minimr_dns_rr_lexcmp(tmprstat.cache_class, tmprstat.type, &tmp[tmprstat.data_offset], tmprstat.dlength, rstat->cache_class, rstat->type, &msg[rstat->data_offset], rstat->dlength);
 
 
                     } else {
@@ -714,16 +697,54 @@ int main()
                     }
 
                 } else {
-                    MINIMR_DEBUGF("our records are already taken!\n");
-
-                    exit(EXIT_FAILURE);
+                   state = State_Reconfigure;
                 }
 
                 return MINIMR_CONTINUE;
             };
 
-            minimr_parse_msg(in, inlen, filter_names, nfilter_names, NULL, rrhandler, &from_addr);
+            int res = minimr_parse_msg(in, inlen, filter_names, nfilter_names, NULL, rrhandler, &from_addr);
 
+            if (res != MINIMR_OK){
+                continue;
+            }
+
+            if (!has_conflict){
+                continue;
+            }
+
+            for (int i = 0; i < nties; i++){
+                if (ties[i].present){
+                    if (ties[i].lexcmp > 0){
+                        // we win, nothing to do
+                    } else {
+                        // we lose
+                        state = State_ProbingLostTie;
+                    }
+                }
+            }
+
+            // we might still have lost..
+            if (state == State_ProbingAwaitAnswers){
+                if (nties < MINIMR_DNS_GET_NQ(in)){
+                    // we lose...
+                    state = State_ProbingLostTie;
+                }
+            }
+        }
+
+        if (state == State_ProbingLostTie){
+            thread([&nprobe](){
+                this_thread::sleep_for(std::chrono::seconds(1));
+
+                // reset probing
+                nprobe = 0;
+
+                state = State_ProbingQuery;
+            });
+
+            // just consume any incoming data
+            receive_udp_packet(in, sizeof(in), from_addr);
         }
 
         if (state == State_Reconfigure){

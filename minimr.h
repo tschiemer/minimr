@@ -121,7 +121,9 @@ extern "C" {
 #define MINIMR_DNS_HDR1_QR_QUERY        0x00
 #define MINIMR_DNS_HDR1_QR_REPLY        0x80
 
-#define MINIMR_DNS_IS_QUERY(__msg__) ( ((__msg__)[3] & MINIMR_DNS_HDR1_QR) == MINIMR_DNS_HDR1_QR_QUERY )
+#define MINIMR_DNS_IS_QUERY(__msg__) ( ((__msg__)[2] & MINIMR_DNS_HDR1_QR) == MINIMR_DNS_HDR1_QR_QUERY )
+#define MINIMR_DNS_GET_NQ(__msg__) ( ((__msg__)[3] << 8) | (__msg__)[4] )
+
 
 // Multicast DNS shall set the OPCODE field to 0
 #define MINIMR_DNS_HDR1_OPCODE_QUERY    0x00    // standard query (0)
@@ -521,8 +523,8 @@ typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr
 //#define minimr_dns_ntoh_hdr(__hdr__, __src__) MINIMR_DNS_HDR_READ(__src__, (__hdr__)->transaction_id, (__hdr__)->flags[0], (__hdr__)->flags[1], (__hdr__)->nquestions, (__hdr__)->nanswers, (__hdr__)->nauthrr, (__hdr__)->nextrarr)
 //#define minimr_dns_hton_hdr(__dst__, __hdr__) MINIMR_DNS_HDR_WRITE(__dst__, (__hdr__)->transaction_id, (__hdr__)->flags[0], (__hdr__)->flags[1], (__hdr__)->nquestions, (__hdr__)->nanswers, (__hdr__)->nauthrr, (__hdr__)->nextrarr)
 
-//void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes);
-//void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr);
+void minimr_dns_ntoh_hdr(struct minimr_dns_hdr *hdr, uint8_t *bytes);
+void minimr_dns_hton_hdr(uint8_t *bytes, struct minimr_dns_hdr *hdr);
 
 //void minimr_dns_hdr_stdquery(uint8_t * dst, uint16_t nquestions, uint16_t nknownanswers);
 //void minimr_dns_hdr_stdresponse(uint8_t * dst, uint16_t nrr, uint16_t nauthrr, uint16_t nextrarr);
