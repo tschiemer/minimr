@@ -558,19 +558,15 @@ typedef enum  {
     minimr_dns_rr_section_extra
 } minimr_dns_rr_section;
 
-typedef uint8_t (*minimr_response_handler)(minimr_dns_rr_section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data);
+typedef uint8_t (*minimr_query_handler)(struct minimr_dns_query_stat * qstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * user_data);
+typedef uint8_t (*minimr_response_handler)(minimr_dns_rr_section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * user_data);
 
-uint8_t minimr_handle_responses(
+uint8_t minimr_parse_msg(
     uint8_t *msg, uint16_t msglen,
     uint8_t **filter_names, uint16_t nfilter_names,
-    minimr_response_handler handler, void * user_data
-);
-
-uint8_t minimr_handle_probing_messages(
-    uint8_t *msg, uint16_t msglen,
-    struct minimr_dns_query_stat qstats[], uint16_t nqstats,
-    uint8_t **filter_names, uint16_t nfilter_names,
-    minimr_response_handler handler, void * user_data
+    minimr_query_handler qhandler,
+    minimr_response_handler rrhandler,
+    void * user_data
 );
 
 uint8_t minimr_announce(
@@ -583,11 +579,14 @@ uint8_t minimr_terminate(
         uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
 );
 
-uint8_t minimr_dns_query(
+uint8_t minimr_query(
         struct minimr_dns_rr **records, uint16_t nrecords,
         uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
         uint8_t unicast_requested
 );
+
+int8_t minimr_dns_rr_lexcmp(uint16_t lhsclass, uint16_t lhstype, uint8_t * lhsrdata, uint16_t lhsrdatalen,
+                            uint16_t rhsclass, uint16_t rhstype, uint8_t * rhsrdata, uint16_t rhsrdatalen);
 
 #ifdef __cplusplus
 }

@@ -26,28 +26,23 @@ using namespace std;
 // otherwise you can encode the length of each following component, such as "\x0fWhere be Kittens\x05local"
 // also, the terminating NUL-character '\0' is necessary.
 
-#define RR_A_NAME ".where-be-kittens.local"
+#define HOST_NAME ".where-be-kittens.local"
+#define SERVICE_NAME ".Here be Echoing Kittens._echo._udp.local"
+#define SERVICE_PTR_NAME "._echo._udp.local"
+#define CUSTOM_PTR_NAME "._echo._tcp.local"
+
 // the predefined IPv4 type is an uint8_t[4]
-#define RR_A_IPv4 {127, 0, 0, 1}
-
-#define RR_AAAA_NAME ".where-be-kittens.local"
+#define HOST_IPv4 {127, 0, 0, 1}
 // the predefined IPv6 type is an uint16_t[8]
-#define RR_AAAA_IPv6 {1,2,3,4,5,6,7,8}
+#define HOST_IPv6 {1,2,3,4,5,6,7,8}
 
-#define RR_PTR_NAME "._echo._udp.local"
-#define RR_PTR_DOMAIN RR_A_NAME
-
-#define RR_SRV_NAME ".Here be Echoing Kittens._echo._udp.local"
-#define RR_SRV_TARGET RR_A_NAME
-
-#define RR_TXT_NAME RR_A_NAME
 // when using minimr_dns_normalize_field() all key/value pairs must be preceeded by one character to be defined by you
 // MUST NOT be the NUL character '\0' which is used to detect the end of the data
 #define MY_TXT_MARKER '.'
-#define RR_TXT_DATA ".key1=value1.key2=value2.key3=value3"
+#define SERVICE_DATA ".key1=value1.key2=value2.key3=value3"
 
-#define RR_CUSTOM_PTR_NAME "._echo._"
-#define RR_CUSTOM_PTR_DOMAIN RR_A_NAME
+
+
 
 
 /***** types *****/
@@ -60,8 +55,8 @@ typedef void * my_socket_or_ipaddr_type;
 // this example shows in particular how to add any custom fields
 
 typedef
-MINIMR_DNS_RR_TYPE_BEGIN(sizeof(RR_CUSTOM_PTR_NAME))
-MINIMR_DNS_RR_TYPE_BODY_PTR(sizeof(RR_CUSTOM_PTR_DOMAIN))
+MINIMR_DNS_RR_TYPE_BEGIN(sizeof(CUSTOM_PTR_NAME))
+MINIMR_DNS_RR_TYPE_BODY_PTR(sizeof(HOST_NAME))
     struct minimr_dns_rr * rr_a;
     struct minimr_dns_rr * rr_aaaa;
     struct minimr_dns_rr * rr_txt;
@@ -69,8 +64,10 @@ MINIMR_DNS_RR_TYPE_END()
 Custom_PTR_RR;
 
 typedef enum {
+    State_Init,
     State_ProbingQuery,
     State_ProbingAwaitAnswers,
+    State_Reconfigure,
     State_Announce,
     State_Responding,
     State_TieBreaking
@@ -96,59 +93,61 @@ static void send_udp_packet(uint8_t * payload, uint16_t len, UnicastMulticast um
 /* RR config */
 
 
-static MINIMR_DNS_RR_TYPE_A(sizeof(RR_A_NAME)) RR_A = {
+static MINIMR_DNS_RR_TYPE_A(sizeof(HOST_NAME)) RR_A = {
     .type = MINIMR_DNS_TYPE_A,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 0xffffffff,
     .fun = generic_rr_handler,
-    .name = RR_A_NAME,
+    .name = HOST_NAME,
     // anything hereafter is not part of the basic struct minimr_dns_rr
-    .ipv4 = RR_A_IPv4
+    .ipv4 = HOST_IPv4
 };
 
-static MINIMR_DNS_RR_TYPE_AAAA(sizeof(RR_AAAA_NAME)) RR_AAAA = {
+static MINIMR_DNS_RR_TYPE_AAAA(sizeof(HOST_NAME)) RR_AAAA = {
     .type = MINIMR_DNS_TYPE_AAAA,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
     .fun = generic_rr_handler,
-    .name = RR_AAAA_NAME,
+    .name = HOST_NAME,
     // anything hereafter is not part of the basic struct minimr_dns_rr
-    .ipv6 = RR_AAAA_IPv6
+    .ipv6 = HOST_IPv6
 };
 
-static MINIMR_DNS_RR_TYPE_PTR(sizeof(RR_PTR_NAME), sizeof(RR_PTR_DOMAIN)) RR_PTR = {
+static MINIMR_DNS_RR_TYPE_PTR(sizeof(SERVICE_NAME), sizeof(HOST_NAME)) RR_PTR = {
     .type = MINIMR_DNS_TYPE_PTR,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
     .fun = generic_rr_handler,
-    .name = RR_PTR_NAME,
+    .name = SERVICE_NAME,
     // anything hereafter is not part of the basic struct minimr_dns_rr
-    .domain = RR_PTR_DOMAIN
+    .domain = HOST_NAME
 };
 
-static MINIMR_DNS_RR_TYPE_SRV(sizeof(RR_SRV_NAME), sizeof(RR_SRV_TARGET)) RR_SRV = {
+
+static MINIMR_DNS_RR_TYPE_TXT(sizeof(SERVICE_NAME), sizeof(SERVICE_DATA)) RR_TXT = {
+        .type = MINIMR_DNS_TYPE_TXT,
+        .cache_class = MINIMR_DNS_CLASS_IN,
+        .ttl = 60,
+        .fun = generic_rr_handler,
+        .name = SERVICE_NAME,
+        // anything hereafter is not part of the basic struct minimr_dns_rr
+        .txt_length = sizeof(SERVICE_DATA),
+        .txt = SERVICE_DATA
+};
+
+static MINIMR_DNS_RR_TYPE_SRV(sizeof(SERVICE_NAME), sizeof(HOST_NAME)) RR_SRV = {
     .type = MINIMR_DNS_TYPE_SRV,
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
     .fun = generic_rr_handler,
-    .name = RR_PTR_NAME,
+    .name = SERVICE_NAME,
     // anything hereafter is not part of the basic struct minimr_dns_rr
     .priority = 1,
     .weight = 100,
     .port = 7,
-    .target = RR_SRV_TARGET
+    .target = HOST_NAME
 };
 
-static MINIMR_DNS_RR_TYPE_TXT(sizeof(RR_TXT_NAME), sizeof(RR_TXT_DATA)) RR_TXT = {
-    .type = MINIMR_DNS_TYPE_TXT,
-    .cache_class = MINIMR_DNS_CLASS_IN,
-    .ttl = 60,
-    .fun = generic_rr_handler,
-    .name = RR_TXT_NAME,
-    // anything hereafter is not part of the basic struct minimr_dns_rr
-    .txt_length = sizeof(RR_TXT_DATA),
-    .txt = RR_TXT_DATA
-};
 
 // isn't this much nicer?
 static Custom_PTR_RR RR_PTR_CUSTOM = {
@@ -156,10 +155,9 @@ static Custom_PTR_RR RR_PTR_CUSTOM = {
     .cache_class = MINIMR_DNS_CLASS_IN,
     .ttl = 60,
     .fun = custom_rr_handler,
-    .name = RR_CUSTOM_PTR_NAME,
+    .name = CUSTOM_PTR_NAME,
     // anything hereafter is not part of the basic struct minimr_dns_rr
-    .domain_length = sizeof(RR_CUSTOM_PTR_NAME), // TODO automate for default case
-    .domain = RR_CUSTOM_PTR_DOMAIN,
+    .domain = HOST_NAME,
     .rr_a = (struct minimr_dns_rr *)&RR_A,
     .rr_aaaa = (struct minimr_dns_rr *)&RR_AAAA,
     .rr_txt = (struct minimr_dns_rr *)&RR_TXT,
@@ -171,9 +169,9 @@ static Custom_PTR_RR RR_PTR_CUSTOM = {
 static  struct minimr_dns_rr * records[] = {
     (struct minimr_dns_rr *)&RR_A,
     (struct minimr_dns_rr *)&RR_AAAA,
-    (struct minimr_dns_rr *)&RR_PTR,
+    (struct minimr_dns_rr *)&RR_TXT, // TXT before SRV
     (struct minimr_dns_rr *)&RR_SRV,
-    (struct minimr_dns_rr *)&RR_TXT,
+    (struct minimr_dns_rr *)&RR_PTR, // PTRs last
     NULL, // will be skipped (handy when you want to dynamically de-/activate records
     (struct minimr_dns_rr *)&RR_PTR_CUSTOM,
 };
@@ -545,7 +543,7 @@ int main()
 
     struct minimr_dns_query_stat qstats[NQSTATS];
 
-    volatile State state = RECORDS_ARE_UNIQUE ? State_Announce : State_ProbingQuery;
+    static volatile State state = State_Init;
 
     uint8_t nprobe = 0;
 
@@ -557,6 +555,16 @@ int main()
     uint16_t outlen = 0;
 
     while(!feof(stdin)){
+
+        if (state == State_Init){
+            // well whatever
+            #if RECORDS_ARE_UNIQUE
+            state = State_Announce;
+            #else
+            state = State_ProbingQuery;
+            #endif
+        }
+
 
 
         #if RECORDS_ARE_UNIQUE == 0
@@ -592,7 +600,7 @@ int main()
 
             state = State_ProbingAwaitAnswers;
 
-            std::thread([&state, &nprobe](){
+            std::thread([&nprobe](){
                 std::this_thread::sleep_for(std::chrono::milliseconds(MINIMR_DNS_PROBE_WAIT_MS));
 
                 if (state != State_ProbingAwaitAnswers){
@@ -632,23 +640,97 @@ int main()
             };
             static uint16_t nfilter_names = sizeof(filter_names) / sizeof(uint8_t *);
 
-            minimr_handle_probing_messages(in, inlen, filter_names, nfilter_names, [](minimr_dns_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * from_addr) -> uint8_t {
+            static uint8_t service_conflict;
+            static uint8_t service_lexcmp[2];
+            static uint8_t service_nlexcmp;
 
-                // if it is a query and contains
+            service_conflict = 0;
+            service_nlexcmp = 0;
+
+            static auto rrhandler = [](minimr_dns_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * from_addr) -> uint8_t {
+
+                // other hosts that probe for the same name will send queries for that name which contain RR to be in the authority section (only)
                 if (MINIMR_DNS_IS_QUERY(msg)){
-                    if (section == minimr_dns_rr_section_answer){
 
+                    if (section == minimr_dns_rr_section_authority){
+
+                        uint8_t * matched = filter_names[ifilter];
+
+
+                        // if matched our A record
+                        if (ifilter == 0){
+
+                            int lo = minimr_dns_rr_lexcmp(RR_A.cache_class, RR_A.type, RR_A.ipv4, sizeof(RR_A.ipv4), rstat->cache_class, rstat->type, &msg[rstat->data_offset], rstat->dlength);
+
+                            if (lo > 0){ // our data is lexicographically before the other data, so we lose
+                                // we win, don't do anything
+
+                                return MINIMR_CONTINUE;
+                            } else {
+                                // we lose..
+                                // unless the other probing device doesn't use the given hostname, it's somewhat pointless to check anything else.
+                                // let's be negative and just reconfigure
+
+                                state = State_Reconfigure;
+
+                                return MINIMR_ABORT;
+                            }
+
+                        } else { // matched our service record
+
+                            // well, according to RFC6762 section 8.2.1 about probe tiebreaking of multiple records (SRV + TXT) records are ment to be sorted in order
+                            // but we can not expect other hosts to send their records in this order (although it makes sense to do so)
+                            // but... instead of doing all of this, why not just reconfigure?
+
+//                            state = State_Reconfigure;
+//                            return MINIMR_ABORT;
+
+
+                            if (rstat->type == MINIMR_DNS_TYPE_TXT){
+                                service_lexcmp[0] =minimr_dns_rr_lexcmp(RR_TXT.cache_class, RR_TXT.type, RR_TXT.txt, RR_TXT.txt_length, rstat->cache_class, rstat->type, &msg[rstat->data_offset], rstat->dlength);
+                                // TXT comes before SRV, so if we lose TXT anything else is irrelevant
+                                if (service_lexcmp[0] < 1 || (service_nlexcmp == 1 && service_lexcmp[1] < 1)){
+                                    state = State_Reconfigure;
+                                    return MINIMR_ABORT;
+                                }
+                                service_nlexcmp += 1;
+                                service_conflict = true;
+                            }
+                            if (rstat->type == MINIMR_DNS_TYPE_SRV){
+                                // well, the lexographical comparator, doesn't necessarily work on our fancy RR_SRV type, because it uses fields and not a raw data field..
+                                // so we can't use the lexicographical comparator ...
+
+                                MINIMR_DEBUGF("uh oh!\n");
+
+                                exit(EXIT_FAILURE);
+                            }
+
+
+                        }
+
+
+                    } else {
+                        // shouldn't occur (I would think)
                     }
 
-                } else { // is response
+                } else {
                     MINIMR_DEBUGF("our records are already taken!\n");
 
                     exit(EXIT_FAILURE);
                 }
 
                 return MINIMR_CONTINUE;
-            }, &from_addr);
+            };
 
+            minimr_parse_msg(in, inlen, filter_names, nfilter_names, NULL, rrhandler, &from_addr);
+
+        }
+
+        if (state == State_Reconfigure){
+
+            // do whatever
+
+            state = State_Init;
         }
         #endif // RECORDS_ARE_UNIQUE == 0
 
