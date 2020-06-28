@@ -7,7 +7,7 @@
 #ifndef MINIMR_MINIMR_H
 #define MINIMR_MINIMR_H
 
-#include "minimropt.h"
+#include "examples/minimropt.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,9 +61,9 @@ extern "C" {
 #endif
 
 
-
-//TODO endianess etc
-
+#ifndef MINIMR_COMPRESSION_MAX_JUMPS
+#define MINIMR_COMPRESSION_MAX_JUMPS 8
+#endif
 
 /*************** minimr function return values  **************/
 
@@ -296,7 +296,7 @@ struct minimr_dns_query_stat {
     uint16_t type;          // QTYPE
     uint16_t unicast_class; // QUNICAST bit and QCLASS
 
-    uint16_t name_length;   // computed name length
+//    uint16_t name_length;   // computed name length
     uint16_t name_offset;   // offset of name w.r.t message base
     
     // internal usage
@@ -647,18 +647,19 @@ void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t mark
  * Reverse function of minimr_dns_normalize_field()
  * (field must be
  */
-//void minimr_dns_denormalize_field(uint8_t * field, uint8_t marker);
+void minimr_dns_denormalize_field(uint8_t * field, uint16_t length, uint8_t marker);
+
+uint8_t minimr_dns_name_len(uint16_t namepos, uint8_t * msg, uint16_t msglen, uint8_t * namelen, uint8_t * bytelen);
 
 /**
  * Lexicographic comparison of two NAMEs where the first MUST be uncompressed and the second CAN be compressed with given message bounds
  */
-int8_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen);
+int32_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen);
 
 /**
- * Copies possibly compressed name to given destination and returns length of string
- * Note: copied string is
+ * Copies possibly compressed name to given destination and returns length of NUL-terminated string
  */
-uint16_t minimr_dns_cpy_name(uint8_t * uncompressed_name_dst, uint16_t namepos, uint8_t * msg, uint8_t msglen);
+int32_t minimr_dns_uncompress_name(uint8_t * uncompressed_name, uint16_t maxlen, uint16_t namepos, uint8_t * msg, uint8_t msglen);
 
 
 /*************** Generic framework functions **************/
@@ -671,8 +672,8 @@ typedef enum  {
     minimr_dns_rr_section_extra
 } minimr_dns_rr_section;
 
-typedef uint8_t (*minimr_query_handler)(struct minimr_dns_query_stat * qstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * user_data);
-typedef uint8_t (*minimr_rr_handler)(minimr_dns_rr_section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * user_data);
+typedef uint8_t (*minimr_query_handler)(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * qstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * user_data);
+typedef uint8_t (*minimr_rr_handler)(struct minimr_dns_hdr * hdr, minimr_dns_rr_section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * user_data);
 
 /**
  * Tries to parse given mDNS message calling the (optional) handlers for each encountered query or RR
@@ -683,9 +684,8 @@ typedef uint8_t (*minimr_rr_handler)(minimr_dns_rr_section, struct minimr_dns_rr
  */
 uint8_t minimr_parse_msg(
         uint8_t *msg, uint16_t msglen,
-        uint8_t **filter_names, uint16_t nfilter_names,
-        minimr_query_handler qhandler,
-        minimr_rr_handler rrhandler,
+        minimr_query_handler qhandler, uint8_t **qfilter_names, uint16_t nqfilter_names,
+        minimr_rr_handler rrhandler, uint8_t **rrfilter_names, uint16_t nrrfilter_names,
         void * user_data
 );
 

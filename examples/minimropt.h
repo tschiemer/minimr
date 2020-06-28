@@ -13,6 +13,9 @@
 // the standard int definitions (uint8_t etc) are required, define as you please
 #include <stdint.h>
 
+// custom field added to RRs to save
+//#define MINIMR_RR_CUSTOM_FIELD uint32_t last_responded;
+
 #define MINIMR_TIMESTAMP_USE 1
 #define MINIMR_TIMESTAMP_TYPE uint32_t
 //#define MINIMR_TIMESTAMP_NOW() my_timestamp_now()

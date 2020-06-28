@@ -1,4 +1,4 @@
-#include "minimr.h"
+#include "../minimr.h"
 
 #include <iostream>
 #include <unistd.h>
@@ -609,7 +609,7 @@ int main()
                 ties[i].present = 0;
             }
 
-            static auto rrhandler = [](minimr_dns_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * from_addr) -> uint8_t {
+            static auto rrhandler = [](struct minimr_dns_hdr * hdr, minimr_dns_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * from_addr) -> uint8_t {
 
                 // other hosts that probe for the same name will send queries for that name which contain RR to be in the authority section (only)
                 if ( (MINIMR_DNS_HDR_READ_FLAG1(msg) & MINIMR_DNS_HDR1_QR) == MINIMR_DNS_HDR1_QR_QUERY){

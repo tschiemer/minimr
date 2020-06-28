@@ -23,35 +23,41 @@ uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat * stat, uint8
 {
     uint16_t p = *pos;
 
-    // minlen = QNAME(3)[= <len> <name> NUL] QTYPE(2) UNICAST/QCLASS(2)
-    if (p + 7 >= msglen){
+    // minlen = QNAME(2)[= <pointer>] QTYPE(2) UNICAST/QCLASS(2)
+    if (p + 5 >= msglen){
+//        MINIMR_DEBUGF("0 p %d msglen %d\n", p, msglen);
         return MINIMR_NOT_OK;
     }
 
     for(; p < msglen && msg[p] != '\0'; p++){
-        // just looking for the end of qname
-        // note: it's not checked wether the qname is correctly formatted
+        // just looking for the end of rrname
+        // note: it's not checked wether the rrname is correctly formatted
 
-        // fail if the name of a question is compressed.
         if ( (msg[p] & MINIMR_DNS_COMPRESSED_NAME) == MINIMR_DNS_COMPRESSED_NAME){
-            return MINIMR_DNS_HDR2_RCODE_SERVAIL;
+            p ++;
+//            MINIMR_DEBUGF("is jump\n");
+            break;
         }
+
+//        MINIMR_DEBUGF("p + %d\n", msg[p]);
+
+        p += msg[p];
     }
 
     // simple sanity check
     // did not go beyond msg
-    // read at least 3 bytes?
-    // remaining minlen = QTYPE(2) UNICAST/QCLASS(2)
-    if (p >= msglen || p - *pos < 3 || p + 4 > msglen){
+    // read at least 1 bytes?
+    if (p >= msglen || p == *pos ){
+//        MINIMR_DEBUGF("1 *pos %d p %d msglen %d\n", *pos, p, msglen);
         return MINIMR_NOT_OK;
     }
 
-    // move past NUL
-    p ++;
+//    stat->name_length = p - *pos;
+
+    // move past last name byte (either NUL or second byte of pointer offset
+    p++;
 
     stat->name_offset = *pos;
-    stat->name_length = p - *pos;
-
 
     stat->type = msg[p++] << 8;
     stat->type |= msg[p++];
@@ -61,7 +67,7 @@ uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat * stat, uint8
 
     *pos = p;
 
-    MINIMR_DEBUGF("qstat\n type %d unicast %d class %d name_offset %d name_len %d\n", stat->type, stat->unicast_class & MINIMR_DNS_QUNICAST, stat->unicast_class & MINIMR_DNS_QCLASS, stat->name_offset, stat->name_length);
+    MINIMR_DEBUGF("qstat\n type %d unicast %d class %d name_offset %d\n", stat->type, (stat->unicast_class & MINIMR_DNS_QUNICAST) == MINIMR_DNS_QUNICAST, stat->unicast_class & MINIMR_DNS_QCLASS, stat->name_offset);
 
     return MINIMR_OK;
 }
@@ -75,61 +81,34 @@ uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat * stat, uint8_t * m
         return MINIMR_NOT_OK;
     }
 
+    stat->name_offset = p;
 
-    if ( (msg[p] & MINIMR_DNS_COMPRESSED_NAME) == MINIMR_DNS_COMPRESSED_NAME){
-        stat->name_offset = (MINIMR_DNS_COMPRESSED_NAME_OFFSET & msg[p++]) << 8;
-        stat->name_offset |=  msg[p++];
+    for(; p < msglen && msg[p] != '\0'; p++){
+        // just looking for the end of rrname
+        // note: it's not checked wether the rrname is correctly formatted
 
-        uint16_t name_pos = stat->name_offset;
-
-        for(; name_pos < msglen && msg[name_pos] != '\0'; name_pos++){
-            // just looking for the end of rrname
-            // note: it's not checked wether the rrname is correctly formatted
-
-            // do not allow recursive compression
-            if ( (msg[name_pos] & MINIMR_DNS_COMPRESSED_NAME) == MINIMR_DNS_COMPRESSED_NAME){
-                return MINIMR_DNS_HDR2_RCODE_SERVAIL;
-            }
+        if ( (msg[p] & MINIMR_DNS_COMPRESSED_NAME) == MINIMR_DNS_COMPRESSED_NAME){
+            p ++;
+//            MINIMR_DEBUGF("is jump\n");
+            break;
         }
 
+//        MINIMR_DEBUGF("p + %d\n", msg[p]);
 
-        // simple sanity check
-        // did not go beyond msg
-        // read at least 3 bytes?
-        if (name_pos >= msglen || name_pos - stat->name_offset < 3){
-            return MINIMR_NOT_OK;
-        }
+        p += msg[p];
+    }
 
-        stat->name_length = name_pos - stat->name_offset;
-
-    } else {
-        stat->name_offset = p;
-
-        for(; p < msglen && msg[p] != '\0'; p++){
-            // just looking for the end of rrname
-            // note: it's not checked wether the rrname is correctly formatted
-
-            // do not allow partial name compression
-            // fail if the name of a question is compressed.
-            if ( (msg[p] & MINIMR_DNS_COMPRESSED_NAME) == MINIMR_DNS_COMPRESSED_NAME){
-                return MINIMR_DNS_HDR2_RCODE_SERVAIL;
-            }
-        }
-
-        // simple sanity check
-        // did not go beyond msg
-        // read at least 3 bytes?
-        if (p >= msglen || p - *pos < 3 ){
-            return MINIMR_NOT_OK;
-        }
-
-        stat->name_length = p - *pos;
-
-        p++;
+    // simple sanity check
+    // did not go beyond msg
+    // read at least 1 bytes?
+    if (p >= msglen || p == *pos ){
+//        MINIMR_DEBUGF("1 *pos %d p %d msglen %d\n", *pos, p, msglen);
+        return MINIMR_NOT_OK;
     }
 
     // minlen = RRTYPE(2) CACHE/RRCLASS(2) TTL(4) RDLENGTH(2) + RDLENGTH
     if (p + 10 >= msglen){
+        MINIMR_DEBUGF("2");
         return MINIMR_NOT_OK;
     }
 
@@ -186,7 +165,6 @@ int8_t minimr_dns_rr_lexcmp(uint16_t lhsclass, uint16_t lhstype, uint8_t * lhsrd
 void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t marker)
 {
     MINIMR_ASSERT(field != NULL);
-    MINIMR_ASSERT(length != NULL);
 
     uint16_t i = 0;
 
@@ -212,28 +190,184 @@ void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t mark
     }
 }
 
-int8_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen)
+void minimr_dns_denormalize_field(uint8_t * field, uint16_t length, uint8_t marker)
 {
-    MINIMR_DEBUGF("name_cmp not yet implemented");
-
-    //TODO
-
-    return 0;
+    MINIMR_ASSERT(field != NULL);
+    uint8_t seglen;
+    for(uint16_t pos = 0; pos < length; pos += seglen + 1){
+        seglen = field[pos];
+        field[pos] = marker;
+    }
 }
 
+uint8_t minimr_dns_name_len(uint16_t namepos, uint8_t * msg, uint16_t msglen, uint8_t * namelen, uint8_t * bytelen)
+{
+    return MINIMR_OK;
+}
 
+#define LOWERCASE(c) ( ('A' <= (c) && (c) <= 'Z') ? ((c) - 'A' + 'a' ) : (c) )
+//#define LOWERCASE(c) c
+
+int32_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen)
+{
+    MINIMR_ASSERT(uncompressed_name != NULL);
+    MINIMR_ASSERT(msg != NULL);
+    MINIMR_ASSERT(msglen > 0);
+    MINIMR_ASSERT(namepos < msglen);
+
+    uint16_t len = 0;
+
+    uint8_t njumps = 0;
+
+    while (uncompressed_name[len] != '\0' && namepos < msglen && msg[namepos] != '\0'){
+
+        // is name compressed? jump
+        if ((msg[namepos] & MINIMR_DNS_COMPRESSED_NAME) == MINIMR_DNS_COMPRESSED_NAME){
+
+            uint16_t offset;
+
+            // is pointer to pointer?????
+            do {
+
+                // is offset address in msg?
+                if (namepos+1 >= msglen){
+                    return -1;
+                }
+
+                offset = ((msg[namepos] & MINIMR_DNS_COMPRESSED_NAME_OFFSET) << 8) | msg[namepos+1];
+
+                njumps++;
+
+//                MINIMR_DEBUGF("jumping (%d) to %d\n", njumps, offset);
+
+                // evil (or faulty) messages can loop
+                if (njumps > MINIMR_COMPRESSION_MAX_JUMPS){
+                    return -1;
+                }
+
+                // actually make jump
+                namepos = offset;
+
+            } while ((msg[namepos] & MINIMR_DNS_COMPRESSED_NAME) == MINIMR_DNS_COMPRESSED_NAME);
+
+
+            // repeat
+            continue;
+        }
+
+        uint8_t seglen = uncompressed_name[len];
+
+
+//        MINIMR_DEBUGF("2 namepos %d seglen %d\n", namepos, seglen);
+
+        for(uint8_t i = 0; i <= seglen && namepos < msglen; i++){
+            uint8_t lhs = uncompressed_name[len++];
+            uint8_t rhs = msg[namepos++];
+
+            lhs = LOWERCASE(lhs);
+            rhs = LOWERCASE(rhs);
+
+            if (lhs < rhs) return -1;
+            if (lhs > rhs) return 1;
+        }
+    }
+
+    if (namepos >= msglen){
+        return 1;
+    }
+
+    // if both are equal, both are NUL
+    if (uncompressed_name[len] == msg[namepos]) return 0;
+
+    if (uncompressed_name[len] == '\0') return -1;
+
+    return 1;
+}
+
+int32_t minimr_dns_uncompress_name(uint8_t * uncompressed_name, uint16_t maxlen, uint16_t namepos, uint8_t * msg, uint8_t msglen)
+{
+    MINIMR_ASSERT(uncompressed_name != NULL);
+    MINIMR_ASSERT(maxlen > 0);
+    MINIMR_ASSERT(msg != NULL);
+    MINIMR_ASSERT(msglen > 0);
+    MINIMR_ASSERT(namepos < msglen);
+
+    uint16_t len = 0;
+
+    uint8_t njumps = 0;
+
+    while (len < maxlen && namepos < msglen && msg[namepos] != '\0'){
+
+        // is name compressed? jump
+        if ((msg[namepos] & MINIMR_DNS_COMPRESSED_NAME) == MINIMR_DNS_COMPRESSED_NAME){
+
+            uint16_t offset;
+
+            // is pointer to pointer?????
+            do {
+
+//                MINIMR_DEBUGF("is jump\n");
+
+                // is offset address in msg?
+                if (namepos+1 >= msglen){
+                    return -1;
+                }
+
+                offset = ((msg[namepos] & MINIMR_DNS_COMPRESSED_NAME_OFFSET) << 8) | msg[namepos+1];
+
+                njumps++;
+
+//                MINIMR_DEBUGF("jumping (%d) to %d\n", njumps, offset);
+
+                // evil (or faulty) messages can loop
+                if (njumps > MINIMR_COMPRESSION_MAX_JUMPS){
+                    return -1;
+                }
+
+                // actually make jump
+                namepos = offset;
+
+            } while ((msg[namepos] & MINIMR_DNS_COMPRESSED_NAME) == MINIMR_DNS_COMPRESSED_NAME);
+
+
+            // repeat
+            continue;
+        }
+
+        uint8_t seglen = msg[namepos];
+
+        if (namepos + seglen >= msglen){
+            return -1;
+        }
+
+        // seglen
+        uncompressed_name[len++] = msg[namepos++];
+
+        for (uint8_t i = 0; i < seglen; i++){
+            uncompressed_name[len++] = msg[namepos++];
+        }
+    }
+
+    if (len >= maxlen || namepos >= msglen){
+        return -1;
+    }
+
+    uncompressed_name[len] = '\0';
+
+    return len;
+}
 
 
 uint8_t minimr_parse_msg(
         uint8_t *msg, uint16_t msglen,
-        uint8_t **filter_names, uint16_t nfilter_names,
-        minimr_query_handler qhandler,
-        minimr_rr_handler rrhandler,
+        minimr_query_handler qhandler, uint8_t **qfilter_names, uint16_t nqfilter_names,
+        minimr_rr_handler rrhandler, uint8_t **rrfilter_names, uint16_t nrrfilter_names,
         void * user_data
 )
 {
     MINIMR_ASSERT(msg != NULL);
-    MINIMR_ASSERT(nfilter_names == 0 || filter_names != NULL);
+    MINIMR_ASSERT(nqfilter_names == 0 || qfilter_names != NULL);
+    MINIMR_ASSERT(nrrfilter_names == 0 || rrfilter_names != NULL);
     MINIMR_ASSERT(qhandler != NULL && rrhandler != NULL); // doesn't make any sense not to use any handler at all.
 
     MINIMR_DEBUGF("\nnew msg %p (len %d)\n", msg, msglen);
@@ -275,15 +409,15 @@ uint8_t minimr_parse_msg(
 
         uint8_t cont = MINIMR_CONTINUE;
 
-        if (nfilter_names == 0){
-            cont = qhandler(&qstat, msg, msglen, 0, user_data);
+        if (nqfilter_names == 0){
+            cont = qhandler(&hdr, &qstat, msg, msglen, 0, user_data);
         } else {
 
-            for (uint16_t i = 0; i < nfilter_names; i++){
+            for (uint16_t i = 0; i < nqfilter_names; i++){
 
-                if (minimr_dns_name_cmp(filter_names[i], qstat.name_offset, msg, msglen) == 0){
+                if (minimr_dns_name_cmp(qfilter_names[i], qstat.name_offset, msg, msglen) == 0){
                     // pass to user rr handler
-                    cont = qhandler(&qstat, msg, msglen, i, user_data);
+                    cont = qhandler(&hdr, &qstat, msg, msglen, i, user_data);
                 }
             }
         }
@@ -293,9 +427,14 @@ uint8_t minimr_parse_msg(
         }
     }
 
+
     // msg seems to be faulty, stop processing
-    if (pos >= msglen){
+    if (pos > msglen){
         return MINIMR_DNS_HDR2_RCODE_FORMERR;
+    }
+
+    if (pos == msglen){
+        return MINIMR_OK;
     }
 
     // if we're not interested in records, skip further processing
@@ -336,14 +475,14 @@ uint8_t minimr_parse_msg(
         uint8_t cont = MINIMR_CONTINUE;
 
         // if any filter records were given, just look for these
-        if (nfilter_names == 0) {
-            cont = rrhandler(section, &rstat, msg, msglen, 0, user_data);
+        if (nrrfilter_names == 0) {
+            cont = rrhandler(&hdr, section, &rstat, msg, msglen, 0, user_data);
         } else {
-            for (uint16_t i = 0; i < nfilter_names; i++){
+            for (uint16_t i = 0; i < nrrfilter_names; i++){
 
-                if (minimr_dns_name_cmp(filter_names[i], rstat.name_offset, msg, msglen) == 0){
+                if (minimr_dns_name_cmp(rrfilter_names[i], rstat.name_offset, msg, msglen) == 0){
                     // pass to user rr handler
-                    cont = rrhandler(section, &rstat, msg, msglen, i, user_data);
+                    cont = rrhandler(&hdr, section, &rstat, msg, msglen, i, user_data);
                 }
             }
         }
@@ -648,26 +787,11 @@ uint8_t minimr_handle_queries(
             if ((qstats[nq].unicast_class & MINIMR_DNS_QCLASS) != MINIMR_DNS_CLASS_ANY &&
                 (qstats[nq].unicast_class & MINIMR_DNS_QCLASS) != (records[ir]->cache_class & MINIMR_DNS_RRCLASS) ) continue;
 
-//            MINIMR_DEBUGF("check len %d == %d\n", qstats[nq].name_length, records[ir]->name_length);
 
             // if name lengths don't match, there's no point checking names
-            if (qstats[nq].name_length != records[ir]->name_length) continue;
+           res = minimr_dns_name_cmp(records[ir]->name, qstats[nq].name_offset, msg, msglen);
 
-//            MINIMR_DEBUGF("check name\n");
-
-            // pretty much a reverse memcmp of the name
-            uint8_t mismatch = 0;
-            for(int32_t i = qstats[nq].name_length - 1; mismatch == 0 && i > 0; i--){
-                uint8_t * qname = &msg[qstats[nq].name_offset];
-                if (qname[i] != records[ir]->name[i]){
-                    mismatch = 1;
-                }
-
-//                MINIMR_DEBUGF("%02x %02x\n", qname[i], records[ir]->name[i]);
-            }
-
-            if (mismatch) continue;
-
+            if (res != 0) continue;
 
             // so it's a match and we might consider responding
             // but let's remember this question and the matching record and let's go to the next question
@@ -733,21 +857,11 @@ uint8_t minimr_handle_queries(
                 // only check name if name offsets do not match
                 if (rstat.name_offset != qstats[iq].name_offset){
 
+
                     // if name lengths don't match, there's no point checking names
-                    if (rstat.name_length != qstats[iq].name_length) continue;
+                    res = minimr_dns_name_cmp(records[qstats[iq].ir]->name, qstats[iq].name_offset, msg, msglen);
 
-                    uint8_t found = 0;
-
-                    // pretty much a reverse memcmp of the name
-                    for(int32_t i = rstat.name_length - 1; found == 0 && i > 0; i--){
-                        uint8_t * rname = &msg[rstat.name_offset];
-                        uint8_t * qname = &msg[qstats[iq].name_offset];
-                        if (qname[i] != qname[i]){
-                            found = 1;
-                        }
-                    }
-
-                    if (found == 0) continue;
+                    if (res != 0) continue;
                 }
 
                 // so it's a match and we have to check wether it's up to date
