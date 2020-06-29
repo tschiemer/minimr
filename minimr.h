@@ -146,6 +146,8 @@ extern "C" {
 #define MINIMR_DNS_TYPE_URI         256
 #define MINIMR_DNS_TYPE_ZONEMD      63
 
+const uint8_t * minimr_dns_type_str(uint16_t type);
+uint16_t minimr_dns_type_fromstr(uint8_t * typestr);
 
 // Marker of compressed name
 #define MINIMR_DNS_COMPRESSED_NAME          0xc0

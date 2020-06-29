@@ -15,6 +15,7 @@ See [minimr-cli-demo](#minimr-cli-demo) to see an example implementation of how 
 
 - [AVAHI](https://www.avahi.org/)
 - [Apple Bonjour](https://developer.apple.com/bonjour/)
+- [zcip](http://zeroconf.sourceforge.net/)
 - [lwIP](http://www.nongnu.org/lwip/2_0_x/group__mdns.html): on top of stack
 - [mbed's nanostack](https://github.com/ARMmbed/mbed-os/blob/master/features/nanostack/sal-stack-nanostack/nanostack/ns_mdns_api.h): on top of stack??
 - [XMOS's lib_xctp](https://github.com/xmos/lib_xtcp/blob/master/lib_xtcp/src/mdns/): for their
@@ -22,32 +23,72 @@ See [minimr-cli-demo](#minimr-cli-demo) to see an example implementation of how 
 
 ## Todos
 
-- [Multicast DNS Character Set](https://tools.ietf.org/html/rfc6762#section-16) and in particular utf8 support
-- Support name compression for in received queries
+- ~~[Multicast DNS Character Set](https://tools.ietf.org/html/rfc6762#section-16) and in particular utf8 support~~
+- ~~Support name compression for in received queries~~
 - Add startup probing (and query) functionality
-- Limit of responses of the same RR
+- Timebased limit of responses of the same RR
 
 ## Known Limitations
 
 - Doesn't handle fragmented/truncated/multi-packet messages. (should be ok?)
 
-## minimr-cli-demo
+## Quick Note on DNS-SD (Service Discovery)
 
-Is a simple command line utility to play around and understand what's happening.
-It reads from STDIN and STDOUT and assumed to receive full mDNS packets (ie, UDP payloads).
+Services published through mDNS typically consist of a minimum of three records:
 
+So when a host wants to discover any specific services it queries for PTR records.
+A generic PTR record with example RRNAME `_echo._udp.local` (let's make up an UDP based echo service) will point to an actual service in it's RRDATA such as `Here Be Kittens._echo._udp.local`.
+
+
+Specific services (or servers) are described in SRV records matching the service name, ex `Here Be Kittens._echo._udp.local`, which include a service priority, weight, used port number and a target (ie canonical hostname which must match with an A and/or AAAA record), ex priority 0, weight 0, port 7, target `here-be-kittens.local`. The actual service name - which often will be presented to users - is the first segment of the record's RRNAME, ex `Here Be Kittens`.
+
+As mentioned the target host must match an A and/or AAAA record which merely are IPv4, IPv6 respectively pointers, ex. IPv4 `10.0.0.100`.
+
+Optional service (configuration) options which MUST have the same RRNAME as the SRV record can (or must?) be defined aswell in the typical format `key1=value1 key2=value2 ...` (in fact each key/value pair is preceded withe length of the pair in bytes).
+
+Thus the minimal required record set to make your services discoverable would entail a PTR, SRV, TXT, A and/or AAAA record.
+
+There are additional record types which could be part of a service but this will not be discussed here.
+
+### mDNS Dependencies and Conflict Potential
+
+Obviously A and AAAA records depend both on an IPv4, IPv6 respectively and that the given chosen hostname is unique.
+
+Most likely an IP address will be obtained from a DHCP server unless link-local addresses are used. The potential for conflicts does exist, but in a somewhat (dynamically) managed address space, there shouldn't be.
+
+Hostnames (ending in `.local`) can potentially conflict with other hosts on the network - which depends on the host setup (now imagine all those `i-love-kittens.local` hostnames). For standalone devices using a unique hardware ID (such as the mac address) as part of the hostname somewhat guarantees uniqueness but on the other hand might not be so user-friendly.
+
+Service names have the very same problem as hostnames where too many kitten lovers will cause service conflicts - as SRV records point to the A/AAAA (hostname) records, there obviously also is a dependency to valid A/AAAA records.
+
+Because of these potential conflicts mDNS entails a (startup) probing phase where the unique record names (A/AAAA, SRV/TXT) are queried for. The are three possible outcomes of this probing phase:
+1. If the host receives an authorative answer for its query, either A/AAAA and/or SRV/TXT, the host will know that it can not use said record names and has to reconfigure.
+2. If the host receives a query for the same records there is a race situation where another host is probing for the same record names. There's a strategy to resolve this (refer to the RFC) where one of the two devices will have to reconfigure.
+3. The host doesn't receive an answer for its query and can thus assume to be allowed to use the records.
+
+Obviously, if record names are guaranteed to be unique the whole probing phase can be skipped, hurray!
+
+
+
+## Utilities
+
+### minimr-reader
 
 ```bash
-# start server (NOTE mdns is on multicast address 224.0.0.251 and port 5353)
-# because of the debug option we'll also see what is being sent out again (alternatively use wireshark or such)
-socat -v -x udp4-recvfrom:6666,ip-add-membership=224.1.0.1:192.168.2.142,fork exec:minimr-cli-demo
-
-
-# send a packet
-cat test-packets/Where-be-Kittens.local-A.bin | socat -u - udp4-datagram:224.1.0.1:6666,range=192.168.2.142/24
+Usage: bin/reader [-q <name>]* [-r <name>]*
+Tries to parse messages passed to STDIN and dumps data in a friendlier format to STDOUT
 ```
 
-for more on socat see http://www.dest-unreach.org/socat/doc/socat-multicast.html
+Example:
+```bash
+------------ NEW MESSAGE --------------
+hdr
+ id 0000 flag 0000 nq 0001 nrr 0000 narr 0000 nexrr 0000
+QUERY qtype 12 (PTR) unicast 0 qclass 0 qname (17) ._echo._udp.local
+```
+
+### minimr-writer
+
+## Examples
 
 ## Implementation notes
 
@@ -56,6 +97,9 @@ Please refer to [RFC6763](https://tools.ietf.org/html/rfc6762) for implementatio
 Some noteworthy/essential extracts where appropriate.
 
 ### General
+
+IPv4 multicast address: 224.0.0.251
+IPv6 (local-link) multicast address: ff02::fb
 
 >   Multicast DNS...
 >   * uses multicast *yay!*

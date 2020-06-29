@@ -5,6 +5,48 @@
 #include "minimr.h"
 
 
+const uint8_t * minimr_dns_type_str(uint16_t type)
+{
+    switch (type) {
+        case MINIMR_DNS_TYPE_ANY:       return (uint8_t*)"ANY";
+        case MINIMR_DNS_TYPE_A:         return (uint8_t*)"A";
+        case MINIMR_DNS_TYPE_AAAA:      return (uint8_t*)"AAAA";
+        case MINIMR_DNS_TYPE_SRV:       return (uint8_t*)"SRV";
+        case MINIMR_DNS_TYPE_TXT:       return (uint8_t*)"TXT";
+        case MINIMR_DNS_TYPE_PTR:       return (uint8_t*)"PTR";
+
+    }
+    return (uint8_t*)"?";
+}
+
+#define _seq1_(lhs, rhs) ( lhs[0] == rhs[0] )
+#define _seq2_(lhs, rhs) ( lhs[0] == rhs[0] )
+#define _seq3_(lhs, rhs) ( lhs[0] == rhs[0] )
+#define _seq4_(lhs, rhs) ( lhs[0] == rhs[0] )
+
+uint16_t minimr_dns_type_fromstr(uint8_t * typestr)
+{
+    if (_seq3_(typestr, "ANY"))     return MINIMR_DNS_TYPE_ANY;
+    if (_seq1_(typestr, "A"))       return MINIMR_DNS_TYPE_A;
+    if (_seq4_(typestr, "AAAA"))    return MINIMR_DNS_TYPE_AAAA;
+    if (_seq3_(typestr, "SRV"))     return MINIMR_DNS_TYPE_SRV;
+    if (_seq3_(typestr, "TXT"))     return MINIMR_DNS_TYPE_TXT;
+    if (_seq3_(typestr, "PTR"))     return MINIMR_DNS_TYPE_PTR;
+
+    MINIMR_DEBUGF("type not recognized! %s\n", typestr);
+
+
+
+    return 0;
+}
+
+#undef _seq1_
+#undef _seq2_
+#undef _seq3_
+#undef _seq4_
+
+
+
 void minimr_dns_hdr_read(struct minimr_dns_hdr *hdr, uint8_t *src) {
 
     MINIMR_DNS_HDR_READ(src, hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nqueries, hdr->nanswers, hdr->nauthrr, hdr->nextrarr)
@@ -77,7 +119,8 @@ uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat * stat, uint8_t * m
     uint16_t p = *pos;
 
     // minlen = QNAME(2) RRTYPE(2) CACHE/RRCLASS(2) TTL(4) RDLENGTH(2) + RDLENGTH
-    if (p + 12 >= msglen){
+    if (p + 11 >= msglen){
+        MINIMR_DEBUGF("s 1\n");
         return MINIMR_NOT_OK;
     }
 
@@ -102,16 +145,18 @@ uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat * stat, uint8_t * m
     // did not go beyond msg
     // read at least 1 bytes?
     if (p >= msglen || p == *pos ){
-//        MINIMR_DEBUGF("1 *pos %d p %d msglen %d\n", *pos, p, msglen);
+        MINIMR_DEBUGF("s 1 *pos %d p %d msglen %d\n", *pos, p, msglen);
         return MINIMR_NOT_OK;
     }
 
     // minlen = RRTYPE(2) CACHE/RRCLASS(2) TTL(4) RDLENGTH(2) + RDLENGTH
     if (p + 10 >= msglen){
-        MINIMR_DEBUGF("2");
+        MINIMR_DEBUGF("s 2");
         return MINIMR_NOT_OK;
     }
 
+    // move past last name byte (either NUL or second byte of pointer offset
+    p++;
 
     stat->type = msg[p++] << 8;
     stat->type |= msg[p++];
@@ -127,7 +172,9 @@ uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat * stat, uint8_t * m
     stat->dlength = msg[p++] << 8;
     stat->dlength |= msg[p++];
 
-    if (p + stat->dlength >= msglen){
+    if (p + stat->dlength > msglen){
+
+        MINIMR_DEBUGF("s 3 p %d dlen %d msglen %d\n", p, stat->dlength, msglen);
         return MINIMR_NOT_OK;
     }
 
@@ -205,8 +252,6 @@ uint8_t minimr_dns_name_len(uint16_t namepos, uint8_t * msg, uint16_t msglen, ui
     return MINIMR_OK;
 }
 
-#define LOWERCASE(c) ( ('A' <= (c) && (c) <= 'Z') ? ((c) - 'A' + 'a' ) : (c) )
-//#define LOWERCASE(c) c
 
 int32_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen)
 {
@@ -264,8 +309,10 @@ int32_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8
             uint8_t lhs = uncompressed_name[len++];
             uint8_t rhs = msg[namepos++];
 
+            #define LOWERCASE(c) ( ('A' <= (c) && (c) <= 'Z') ? ((c) - 'A' + 'a' ) : (c) )
             lhs = LOWERCASE(lhs);
             rhs = LOWERCASE(rhs);
+            #undef LOWERCASE
 
             if (lhs < rhs) return -1;
             if (lhs > rhs) return 1;
@@ -456,19 +503,21 @@ uint8_t minimr_parse_msg(
 
         // in case of a server fail, pass this along
         if (res == MINIMR_DNS_HDR2_RCODE_SERVAIL) {
+            MINIMR_DEBUGF("1\n");
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
         }
 
         if (res != MINIMR_OK){
             // we could respond that it was a faulty query..
+            MINIMR_DEBUGF("2\n");
             return MINIMR_DNS_HDR2_RCODE_FORMERR;
         }
 
-        if (section == minimr_dns_rr_section_answer && ir > section_until){
+        if (section == minimr_dns_rr_section_answer && ir >= section_until){
             section = minimr_dns_rr_section_authority;
             section_until += hdr.nauthrr;
         }
-        if (section == minimr_dns_rr_section_authority && ir > section_until){
+        if (section == minimr_dns_rr_section_authority && ir >= section_until){
             section = minimr_dns_rr_section_extra;
         }
 

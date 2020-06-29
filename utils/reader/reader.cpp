@@ -10,6 +10,7 @@
 void print_help(char * argv[])
 {
     printf("Usage: %s [-q <name>]* [-r <name>]*\n", argv[0]);
+    printf("Tries to parse messages passed to STDIN and dumps data in a friendlier format to STDOUT\n");
 }
 
 uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen)
@@ -32,7 +33,7 @@ void print_hdr(struct minimr_dns_hdr * hdr){
 uint8_t print_query(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * qstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * user_data)
 {
     uint8_t unicast = (qstat->unicast_class & MINIMR_DNS_QUNICAST);
-    uint8_t glass = (qstat->unicast_class & ~MINIMR_DNS_QUNICAST);
+    uint8_t glass = (qstat->unicast_class & ~MINIMR_DNS_QCLASS);
 
     uint8_t name[256] = "";
     int32_t namelen = minimr_dns_uncompress_name(name, sizeof(name), qstat->name_offset, msg, msglen);
@@ -41,7 +42,7 @@ uint8_t print_query(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * 
 
     minimr_dns_denormalize_field(name, namelen, '.');
 
-    printf("QUERY qtype %d unicast %d qclass %d qname (%d) %s\n", qstat->type, unicast, glass, namelen, name);
+    printf("QUERY qtype %d (%s) unicast %d qclass %d qname (%d) %s\n", qstat->type, minimr_dns_type_str(qstat->type), unicast, glass, namelen, name);
 
 
 
@@ -50,6 +51,39 @@ uint8_t print_query(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * 
 
 uint8_t print_rr(struct minimr_dns_hdr * hdr, minimr_dns_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, uint8_t ifilter, void * user_data)
 {
+
+    uint8_t * sectionstr;
+
+    switch (section){
+        case minimr_dns_rr_section_answer:
+            sectionstr = (uint8_t*)"";
+            break;
+        case minimr_dns_rr_section_authority:
+            sectionstr = (uint8_t*)"AUTH";
+            break;
+        case minimr_dns_rr_section_extra:
+            sectionstr = (uint8_t*)"EXTRA";
+            break;
+    }
+
+    uint8_t cacheflush = (rstat->cache_class & MINIMR_DNS_CACHEFLUSH) ? 1 : 0;
+    uint8_t glass = (rstat->cache_class & MINIMR_DNS_RRCLASS);
+
+    uint8_t name[256] = "";
+    int32_t namelen = minimr_dns_uncompress_name(name, sizeof(name), rstat->name_offset, msg, msglen);
+
+    MINIMR_ASSERT(namelen >= 0);
+
+    minimr_dns_denormalize_field(name, namelen, '.');
+
+    printf("%sRR rrtype %d (%s) cacheflush %d rrclass %d rrname (%d) %s rrdata (%d) ", sectionstr, rstat->type, minimr_dns_type_str(rstat->type), cacheflush, glass, namelen, name, rstat->dlength);
+
+    for(uint16_t i = 0; i < rstat->dlength; i++){
+        printf("%02x", msg[rstat->data_offset + i]);
+    }
+
+    printf("\n");
+
     return MINIMR_CONTINUE;
 }
 
