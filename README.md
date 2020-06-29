@@ -50,7 +50,7 @@ Thus the minimal required record set to make your services discoverable would en
 
 There are additional record types which could be part of a service but this will not be discussed here.
 
-### mDNS Dependencies and Conflict Potential
+### Publishing a Service: Dependencies and Conflicts
 
 Obviously A and AAAA records depend both on an IPv4, IPv6 respectively and that the given chosen hostname is unique.
 
