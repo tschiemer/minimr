@@ -67,6 +67,13 @@ Because of these potential conflicts mDNS entails a (startup) probing phase wher
 
 Obviously, if record names are guaranteed to be unique the whole probing phase can be skipped, hurray!
 
+But generally speaking the process of publishing a service should roughly be as follows:
+1. obtain an IP address -> update A/AAAA records
+2. (optional) probe for records -> reconfigure if taken or conflict lost
+3. announce records
+4. forever respond to queries
+   - if record data changes: announce records
+   - when stopping a service: announce records with a TTL of 0 and stop responding
 
 
 ## Utilities
