@@ -7,7 +7,7 @@
 #ifndef MINIMR_MINIMR_H
 #define MINIMR_MINIMR_H
 
-#include "examples/minimropt.h"
+#include "minimropt.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -605,22 +605,22 @@ typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr
 
 // if > 0 will typedef minimr_dns_rr_aaaa with given (max) namelen
 #if MINIMR_DNS_RR_TYPE_AAAA_DEFAULT_NAMELEN > 0
-typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaaa;
+typedef MINIMR_DNS_RR_TYPE_AAAA(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaaa;
 #endif
 
 // if > 0 will typedef minimr_dns_rr_ptr with given (max) namelen and domainlen
 #if MINIMR_DNS_RR_TYPE_PTR_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_PTR_DEFAULT_DOMAINLEN > 0
-typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_ptr;
+typedef MINIMR_DNS_RR_TYPE_PTR(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN, MINIMR_DNS_RR_TYPE_PTR_DEFAULT_DOMAINLEN) minimr_dns_rr_ptr;
 #endif
 
 // if > 0 will typedef minimr_dns_rr_srv with given (max) namelen and targetlen
 #if MINIMR_DNS_RR_TYPE_SRV_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_SRV_DEFAULT_TARGETLEN > 0
-typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_;
+typedef MINIMR_DNS_RR_TYPE_SRV(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN, MINIMR_DNS_RR_TYPE_SRV_DEFAULT_TARGETLEN) minimr_dns_rr_;
 #endif
 
 // if > 0 will typedef minimr_dns_rr_srv with given (max) namelen and txtlen
 #if MINIMR_DNS_RR_TYPE_TXT_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_TXT_DEFAULT_TXTLEN > 0
-typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaa;
+typedef MINIMR_DNS_RR_TYPE_TXT(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN, MINIMR_DNS_RR_TYPE_TXT_DEFAULT_TXTLEN) minimr_dns_rr_aaa;
 #endif
 
 

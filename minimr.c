@@ -694,7 +694,7 @@ uint8_t minimr_announce(
     // add all normal answers RRs
     for(uint16_t i = 0; i < nrecords; i++){
 
-        if (records[i] != NULL){
+        if (records[i] == NULL){
             continue;
         }
 
