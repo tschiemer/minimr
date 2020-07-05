@@ -9,8 +9,23 @@
 
 void print_help(char * argv[])
 {
-    printf("Usage: %s [-q [<qtype>,<qclass>,]<qname>]* [-r <name>]*\n", argv[0]);
+    printf("Usage: %s [-t <q|r>] [-q [<qtype> [<qclass> ]]<qname>]* [-r [<rrtype> [<rrclass> ]]<rrname>]*\n", argv[0]);
     printf("Tries to parse messages passed to STDIN and dumps data in a friendlier format to STDOUT\n");
+    printf("\t -t <q|r> \t Parse only q(ueries) or r(esponses)\n");
+    printf("\t -q [<qtype> [<qclass> ]]<qname>\n\t\t Add query filter for specific types, classes and foremost names. If type and or class are not given, ANY is assumed.\n");
+    printf("\t -r [<rrtype> [<rrclass> ]]<rrname>\n\t\t Add response filter for specific types, classes and foremost names. If type and or class are not given, ANY is assumed.\n");
+    printf("\n");
+    printf("=== IMPORTANT NOTE ===\n");
+    printf("qnames and rrnames these must be formatted as follows: .segment1.segment2. etc .tld\n");
+    printf("\n");
+    printf("Examples:\n");
+    printf("%s -t q\n", argv[0]);
+    printf("%s -q .Here-be-Kittens.local\n", argv[0]);
+    printf("%s -q A .Here-be-Kittens.local\n", argv[0]);
+    printf("%s -r PTR IN _echo._udp.local\n", argv[0]);
+    printf("\n");
+    printf("Copyfright 2020 filou.se, MIT License\n");
+    printf("~~ LONG LIVE KITTENS ~~\n");
 }
 
 uint16_t receive_udp_packet(uint8_t * payload, uint16_t maxlen)
@@ -91,7 +106,7 @@ void add_filter(char * str, std::vector<struct minimr_filter> &filters){
 
         printf("query type = %s (%d), class = %s (%d), name = %s\n", minimr_dns_type_tostr(filter.type), filter.type, minimr_dns_class_tostr(filter.fclass), filter.fclass, filter.name);
 
-    minimr_dns_normalize_name((uint8_t*)pname, NULL);
+    minimr_name_normalize((uint8_t*)pname, NULL);
 
     filters.push_back(filter);
     
@@ -107,11 +122,11 @@ uint8_t print_query(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * 
     uint8_t unicast = (qstat->unicast_class & MINIMR_DNS_QUNICAST);
     uint8_t glass = (qstat->unicast_class & ~MINIMR_DNS_QCLASS);
     uint8_t name[256] = "";
-    int32_t namelen = minimr_dns_uncompress_name(name, sizeof(name), qstat->name_offset, msg, msglen);
+    int32_t namelen = minimr_name_uncompress(name, sizeof(name), qstat->name_offset, msg, msglen);
 
     MINIMR_ASSERT(namelen >= 0);
 
-    minimr_dns_denormalize_field(name, namelen, '.');
+    minimr_name_denormalize(name, namelen);
 
     printf("QUERY qtype %d (%s) unicast %d qclass %d qname (%d) %s\n", qstat->type, minimr_dns_type_tostr(qstat->type), unicast, glass, namelen, name);
 
@@ -119,19 +134,19 @@ uint8_t print_query(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * 
     return MINIMR_CONTINUE;
 }
 
-uint8_t print_rr(struct minimr_dns_hdr * hdr, minimr_dns_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data)
+uint8_t print_rr(struct minimr_dns_hdr * hdr, minimr_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data)
 {
 
     uint8_t * sectionstr;
 
     switch (section){
-        case minimr_dns_rr_section_answer:
+        case minimr_rr_section_answer:
             sectionstr = (uint8_t*)"ANSWER ";
             break;
-        case minimr_dns_rr_section_authority:
+        case minimr_rr_section_authority:
             sectionstr = (uint8_t*)"AUTH ";
             break;
-        case minimr_dns_rr_section_extra:
+        case minimr_rr_section_extra:
             sectionstr = (uint8_t*)"EXTRA ";
             break;
     }
@@ -140,11 +155,11 @@ uint8_t print_rr(struct minimr_dns_hdr * hdr, minimr_dns_rr_section section, str
     uint8_t rclass = (rstat->cache_class & MINIMR_DNS_RRCLASS);
 
     uint8_t name[256] = "";
-    int32_t namelen = minimr_dns_uncompress_name(name, sizeof(name), rstat->name_offset, msg, msglen);
+    int32_t namelen = minimr_name_uncompress(name, sizeof(name), rstat->name_offset, msg, msglen);
 
     MINIMR_ASSERT(namelen >= 0);
 
-    minimr_dns_denormalize_field(name, namelen, '.');
+    minimr_name_denormalize(name, namelen);
 
     printf("%sRR rrtype %d (%s) cacheflush %d rrclass %d rrname (%d) %s rrdata (%d) ", sectionstr, rstat->type, minimr_dns_type_tostr(rstat->type), cacheflush, rclass, namelen, name, rstat->dlength);
 
@@ -166,9 +181,9 @@ uint8_t print_rr(struct minimr_dns_hdr * hdr, minimr_dns_rr_section section, str
                (uint16_t) ((msg[rstat->data_offset + 14] << 8) | msg[rstat->data_offset + 15]));
     }
     else if (rstat->type == MINIMR_DNS_TYPE_PTR) {
-        namelen = minimr_dns_uncompress_name(name, sizeof(name), rstat->data_offset, msg, msglen);
+        namelen = minimr_name_uncompress(name, sizeof(name), rstat->data_offset, msg, msglen);
         MINIMR_ASSERT(namelen >= 0);
-        minimr_dns_denormalize_field(name, namelen, '.');
+        minimr_name_denormalize(name, namelen);
         printf("domain: %s", name);
     }
     else if (rstat->type == MINIMR_DNS_TYPE_SRV) {
@@ -176,9 +191,9 @@ uint8_t print_rr(struct minimr_dns_hdr * hdr, minimr_dns_rr_section section, str
         uint16_t weight = (uint16_t) ((msg[rstat->data_offset + 2] << 8) | msg[rstat->data_offset + 3]);
         uint16_t port = (uint16_t) ((msg[rstat->data_offset + 4] << 8) | msg[rstat->data_offset + 5]);
 
-        namelen = minimr_dns_uncompress_name(name, sizeof(name), rstat->data_offset+6, msg, msglen);
+        namelen = minimr_name_uncompress(name, sizeof(name), rstat->data_offset+6, msg, msglen);
         MINIMR_ASSERT(namelen >= 0);
-        minimr_dns_denormalize_field(name, namelen, '.');
+        minimr_name_denormalize(name, namelen);
 
         printf("priority %hu weight %hu port %hu target: %s", priority, weight, port, name);
     }
@@ -198,10 +213,12 @@ int main(int argc, char * argv[]){
 
     int opt;
 
+    minimr_msgtype msgtype = minimr_msgtype_any;
+
     std::vector<struct minimr_filter> qfilters;
     std::vector<struct minimr_filter> rrfilters;
 
-    while ((opt = getopt(argc, argv, "hq:r:")) != -1) {
+    while ((opt = getopt(argc, argv, "hq:r:t:")) != -1) {
         switch (opt) {
             case 'h':
             case '?':
@@ -216,8 +233,19 @@ int main(int argc, char * argv[]){
                 add_filter(optarg, rrfilters);
                 break;
 
+            case 't':
+                if (optarg[0] == 'q'){
+                    msgtype = minimr_msgtype_query;
+                } else if (optarg[0] == 'r'){
+                    msgtype = minimr_msgtype_response;
+                } else {
+                    fprintf(stderr, "ERROR invalid option for msgtype (-t <q|r>): %s\n", optarg);
+                    return EXIT_FAILURE;
+                }
+                break;
+
             default:
-                printf("ERROR unrecognized option\n");
+                fprintf(stderr, "ERROR unrecognized option\n");
                 print_help(argv);
                 return EXIT_FAILURE;
 
@@ -226,7 +254,6 @@ int main(int argc, char * argv[]){
 
     uint8_t udp_payload[2048];
     uint16_t len;
-
 
 
     while(!feof(stdin)){
@@ -245,7 +272,7 @@ int main(int argc, char * argv[]){
         print_hdr(&hdr);
 
 //        int res = minimr_parse_msg(udp_payload, len,  print_query, &qfilters[0], qfilters.size(), print_rr, &rrfilters[0], rrfilters.size(), NULL);
-        int res = minimr_parse_msg(udp_payload, len,  print_query, &qfilters[0], qfilters.size(), print_rr, &rrfilters[0], rrfilters.size(), NULL);
+        int res = minimr_parse_msg(udp_payload, len,  msgtype, print_query, &qfilters[0], qfilters.size(), print_rr, &rrfilters[0], rrfilters.size(), NULL);
 
         if (res != MINIMR_OK){
             printf("ERROR %d\n", res);

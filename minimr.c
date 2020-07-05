@@ -233,7 +233,7 @@ int8_t minimr_dns_rr_lexcmp(uint16_t lhsclass, uint16_t lhstype, uint8_t * lhsrd
     return 0;
 }
 
-void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t marker)
+void minimr_field_normalize(uint8_t * field, uint16_t * length, uint8_t marker)
 {
     MINIMR_ASSERT(field != NULL);
 
@@ -268,7 +268,7 @@ void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t mark
     }
 }
 
-void minimr_dns_denormalize_field(uint8_t * field, uint16_t length, uint8_t marker)
+void minimr_field_denormalize(uint8_t * field, uint16_t length, uint8_t marker)
 {
     MINIMR_ASSERT(field != NULL);
     uint8_t seglen;
@@ -284,7 +284,7 @@ void minimr_dns_denormalize_field(uint8_t * field, uint16_t length, uint8_t mark
 //}
 
 
-int32_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen)
+int32_t minimr_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen)
 {
     MINIMR_ASSERT(uncompressed_name != NULL);
     MINIMR_ASSERT(msg != NULL);
@@ -362,7 +362,7 @@ int32_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8
     return 1;
 }
 
-int32_t minimr_dns_uncompress_name(uint8_t * uncompressed_name, uint16_t maxlen, uint16_t namepos, uint8_t * msg, uint8_t msglen)
+int32_t minimr_name_uncompress(uint8_t * uncompressed_name, uint16_t maxlen, uint16_t namepos, uint8_t * msg, uint8_t msglen)
 {
     MINIMR_ASSERT(uncompressed_name != NULL);
     MINIMR_ASSERT(maxlen > 0);
@@ -438,6 +438,7 @@ int32_t minimr_dns_uncompress_name(uint8_t * uncompressed_name, uint16_t maxlen,
 
 int32_t  minimr_parse_msg(
         uint8_t *msg, uint16_t msglen,
+        minimr_msgtype msgtype,
         minimr_query_handler qhandler, struct minimr_filter * qfilters, uint16_t nqfilters,
         minimr_rr_handler rrhandler, struct minimr_filter * rrfilters, uint16_t nrrfilters,
         void * user_data
@@ -506,7 +507,7 @@ int32_t  minimr_parse_msg(
                     continue;
                 }
 
-                if (minimr_dns_name_cmp(qfilters[i].name, qstat.name_offset, msg, msglen) == 0){
+                if (minimr_name_cmp(qfilters[i].name, qstat.name_offset, msg, msglen) == 0){
 
                     qstat.match_i = i;
 
@@ -539,7 +540,7 @@ int32_t  minimr_parse_msg(
     MINIMR_DEBUGF("checking %d rr, %d authrr, %d extrarr\n", hdr.nanswers, hdr.nauthrr, hdr.nextrarr);
 
     uint16_t nrr = hdr.nanswers + hdr.nauthrr + hdr.nextrarr;
-    minimr_dns_rr_section section = minimr_dns_rr_section_answer;
+    minimr_rr_section section = minimr_rr_section_answer;
     uint16_t section_until = hdr.nanswers;
 
     for(uint16_t ir = 0; ir < nrr && pos < msglen; ir++){
@@ -558,12 +559,12 @@ int32_t  minimr_parse_msg(
             return MINIMR_DNS_HDR2_RCODE_FORMERR;
         }
 
-        if (section == minimr_dns_rr_section_answer && ir >= section_until){
-            section = minimr_dns_rr_section_authority;
+        if (section == minimr_rr_section_answer && ir >= section_until){
+            section = minimr_rr_section_authority;
             section_until += hdr.nauthrr;
         }
-        if (section == minimr_dns_rr_section_authority && ir >= section_until){
-            section = minimr_dns_rr_section_extra;
+        if (section == minimr_rr_section_authority && ir >= section_until){
+            section = minimr_rr_section_extra;
         }
 
         uint8_t cont = MINIMR_CONTINUE;
@@ -585,7 +586,7 @@ int32_t  minimr_parse_msg(
                     continue;
                 }
 
-                if (minimr_dns_name_cmp(rrfilters[i].name, rstat.name_offset, msg, msglen) == 0){
+                if (minimr_name_cmp(rrfilters[i].name, rstat.name_offset, msg, msglen) == 0){
 
                     rstat.match_i = i;
 
@@ -897,7 +898,7 @@ uint8_t minimr_handle_queries(
 
 
             // if name lengths don't match, there's no point checking names
-           res = minimr_dns_name_cmp(records[ir]->name, qstats[nq].name_offset, msg, msglen);
+           res = minimr_name_cmp(records[ir]->name, qstats[nq].name_offset, msg, msglen);
 
             if (res != 0) continue;
 
@@ -967,7 +968,7 @@ uint8_t minimr_handle_queries(
 
 
                     // if name lengths don't match, there's no point checking names
-                    res = minimr_dns_name_cmp(records[qstats[iq].match_i]->name, qstats[iq].name_offset, msg, msglen);
+                    res = minimr_name_cmp(records[qstats[iq].match_i]->name, qstats[iq].name_offset, msg, msglen);
 
                     if (res != 0) continue;
                 }

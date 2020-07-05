@@ -497,7 +497,7 @@ enum minimr_dns_rr_fun_type {
     minimr_dns_rr_fun_type_get_query
 };
 
-#define MINIMR_DNS_RR_FUN_TYPE_IS_VALID( type ) \
+#define MINIMR_RR_FUN_TYPE_IS_VALID( type ) \
     ((type) == minimr_dns_rr_fun_type_respond_to || \
     (type) == minimr_dns_rr_fun_type_get_rr || \
     (type) == minimr_dns_rr_fun_type_get_authority_rrs || \
@@ -516,7 +516,7 @@ typedef int (*minimr_dns_rr_fun)(enum minimr_dns_rr_fun_type type, struct minimr
 
 
 // Start of named RR struct definer
-#define MINIMR_DNS_RR_TYPE_BEGIN_STNAME(__namelen__, __stname__) \
+#define MINIMR_RR_TYPE_BEGIN_STNAME(__namelen__, __stname__) \
     struct __stname__ { \
         uint16_t type; \
         uint16_t cache_class; \
@@ -532,52 +532,52 @@ typedef int (*minimr_dns_rr_fun)(enum minimr_dns_rr_fun_type type, struct minimr
         uint8_t name[__namelen__];
 
 // Start of anonymous RR struct definer
-#define MINIMR_DNS_RR_TYPE_BEGIN(__namelen__) MINIMR_DNS_RR_TYPE_BEGIN_STNAME(__namelen__,)
+#define MINIMR_RR_TYPE_BEGIN(__namelen__) MINIMR_RR_TYPE_BEGIN_STNAME(__namelen__,)
 
 // End of RR struct definer
-#define MINIMR_DNS_RR_TYPE_END() \
+#define MINIMR_RR_TYPE_END() \
     }
 
 /**
  * actual base type definition
  * defines struct minimr_dns_rr
  */
-MINIMR_DNS_RR_TYPE_BEGIN_STNAME(,minimr_dns_rr) MINIMR_DNS_RR_TYPE_END();
+MINIMR_RR_TYPE_BEGIN_STNAME(,minimr_dns_rr) MINIMR_RR_TYPE_END();
 
 
 // A struct fields
-#define MINIMR_DNS_RR_TYPE_BODY_A() \
+#define MINIMR_RR_TYPE_BODY_A() \
         uint8_t ipv4[4];
 
 // anonymous A RR struct definer
-#define MINIMR_DNS_RR_TYPE_A(__namelen__) \
-    MINIMR_DNS_RR_TYPE_BEGIN(__namelen__) \
-    MINIMR_DNS_RR_TYPE_BODY_A() \
-    MINIMR_DNS_RR_TYPE_END()
+#define MINIMR_RR_TYPE_A(__namelen__) \
+    MINIMR_RR_TYPE_BEGIN(__namelen__) \
+    MINIMR_RR_TYPE_BODY_A() \
+    MINIMR_RR_TYPE_END()
 
 // AAAA struct fields
-#define MINIMR_DNS_RR_TYPE_BODY_AAAA() \
+#define MINIMR_RR_TYPE_BODY_AAAA() \
         uint16_t ipv6[8];
 
 // anonymous AAAA RR struct definer
-#define MINIMR_DNS_RR_TYPE_AAAA(__namelen__) \
-    MINIMR_DNS_RR_TYPE_BEGIN(__namelen__) \
-    MINIMR_DNS_RR_TYPE_BODY_AAAA() \
-    MINIMR_DNS_RR_TYPE_END()
+#define MINIMR_RR_TYPE_AAAA(__namelen__) \
+    MINIMR_RR_TYPE_BEGIN(__namelen__) \
+    MINIMR_RR_TYPE_BODY_AAAA() \
+    MINIMR_RR_TYPE_END()
 
 // PTR struct fields
-#define MINIMR_DNS_RR_TYPE_BODY_PTR(__domainlen__) \
+#define MINIMR_RR_TYPE_BODY_PTR(__domainlen__) \
         uint16_t domain_length; \
         uint8_t domain[__domainlen__];
 
 // anonymous PTR struct definer
-#define MINIMR_DNS_RR_TYPE_PTR(__namelen__, __domainlen__) \
-    MINIMR_DNS_RR_TYPE_BEGIN(__namelen__) \
-    MINIMR_DNS_RR_TYPE_BODY_PTR(__domainlen__) \
-    MINIMR_DNS_RR_TYPE_END()
+#define MINIMR_RR_TYPE_PTR(__namelen__, __domainlen__) \
+    MINIMR_RR_TYPE_BEGIN(__namelen__) \
+    MINIMR_RR_TYPE_BODY_PTR(__domainlen__) \
+    MINIMR_RR_TYPE_END()
 
 // SRV struct fields
-#define MINIMR_DNS_RR_TYPE_BODY_SRV(__targetlen__) \
+#define MINIMR_RR_TYPE_BODY_SRV(__targetlen__) \
         uint16_t priority; \
         uint16_t weight; \
         uint16_t port; \
@@ -585,46 +585,46 @@ MINIMR_DNS_RR_TYPE_BEGIN_STNAME(,minimr_dns_rr) MINIMR_DNS_RR_TYPE_END();
         uint8_t target[__targetlen__];
 
 // anonymous SRV RR struct definer
-#define MINIMR_DNS_RR_TYPE_SRV(__namelen__, __targetlen__) \
-    MINIMR_DNS_RR_TYPE_BEGIN(__namelen__) \
-    MINIMR_DNS_RR_TYPE_BODY_SRV(__targetlen__) \
-    MINIMR_DNS_RR_TYPE_END()
+#define MINIMR_RR_TYPE_SRV(__namelen__, __targetlen__) \
+    MINIMR_RR_TYPE_BEGIN(__namelen__) \
+    MINIMR_RR_TYPE_BODY_SRV(__targetlen__) \
+    MINIMR_RR_TYPE_END()
 
 // TXT struct field
-#define MINIMR_DNS_RR_TYPE_BODY_TXT(__txtlen__) \
+#define MINIMR_RR_TYPE_BODY_TXT(__txtlen__) \
         uint16_t txt_length; \
         uint8_t txt[__txtlen__];
 
 // anonymous TXT RR struct definer
-#define MINIMR_DNS_RR_TYPE_TXT(__namelen__, __txtlen__) \
-    MINIMR_DNS_RR_TYPE_BEGIN(__namelen__) \
-    MINIMR_DNS_RR_TYPE_BODY_TXT(__txtlen__) \
-    MINIMR_DNS_RR_TYPE_END()
+#define MINIMR_RR_TYPE_TXT(__namelen__, __txtlen__) \
+    MINIMR_RR_TYPE_BEGIN(__namelen__) \
+    MINIMR_RR_TYPE_BODY_TXT(__txtlen__) \
+    MINIMR_RR_TYPE_END()
 
 
 // if > 0 will typedef minimr_dns_rr_a with given (max) namelen
-#if MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN > 0
-typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_a;
+#if MINIMR_RR_TYPE_A_DEFAULT_NAMELEN > 0
+typedef MINIMR_RR_TYPE_A(MINIMR_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_a;
 #endif
 
 // if > 0 will typedef minimr_dns_rr_aaaa with given (max) namelen
-#if MINIMR_DNS_RR_TYPE_AAAA_DEFAULT_NAMELEN > 0
-typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaaa;
+#if MINIMR_RR_TYPE_AAAA_DEFAULT_NAMELEN > 0
+typedef MINIMR_RR_TYPE_A(MINIMR_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaaa;
 #endif
 
 // if > 0 will typedef minimr_dns_rr_ptr with given (max) namelen and domainlen
-#if MINIMR_DNS_RR_TYPE_PTR_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_PTR_DEFAULT_DOMAINLEN > 0
-typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_ptr;
+#if MINIMR_RR_TYPE_PTR_DEFAULT_NAMELEN > 0 && MINIMR_RR_TYPE_PTR_DEFAULT_DOMAINLEN > 0
+typedef MINIMR_RR_TYPE_A(MINIMR_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_ptr;
 #endif
 
 // if > 0 will typedef minimr_dns_rr_srv with given (max) namelen and targetlen
-#if MINIMR_DNS_RR_TYPE_SRV_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_SRV_DEFAULT_TARGETLEN > 0
-typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_;
+#if MINIMR_RR_TYPE_SRV_DEFAULT_NAMELEN > 0 && MINIMR_RR_TYPE_SRV_DEFAULT_TARGETLEN > 0
+typedef MINIMR_RR_TYPE_A(MINIMR_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_;
 #endif
 
 // if > 0 will typedef minimr_dns_rr_srv with given (max) namelen and txtlen
-#if MINIMR_DNS_RR_TYPE_TXT_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_TXT_DEFAULT_TXTLEN > 0
-typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaa;
+#if MINIMR_RR_TYPE_TXT_DEFAULT_NAMELEN > 0 && MINIMR_RR_TYPE_TXT_DEFAULT_TXTLEN > 0
+typedef MINIMR_RR_TYPE_A(MINIMR_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaa;
 #endif
 
 
@@ -635,48 +635,58 @@ typedef MINIMR_DNS_RR_TYPE_A(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr
 /**
  * Turns a NUL-terminated string into N segments preceded by a segment length marker and sets <length> to string length (incl. NUL)
  */
-void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t marker);
+void minimr_field_normalize(uint8_t * field, uint16_t * length, uint8_t marker);
 
 /**
  * Shorthand to normalize an uncompressed NAME
  */
-#define minimr_dns_normalize_name(field, length)            minimr_dns_normalize_field(field, length, '.')
+#define minimr_name_normalize(field, length)            minimr_field_normalize(field, length, '.')
 
 /**
  * Shorthand to normalize TXT RDATA
  * length - 1 because length is not NUL-terminated but specifies RDLENGTH
  */
-#define minimr_dns_normalize_txt(field, length, marker)     minimr_dns_normalize_field(field, length, marker); \
+#define minimr_txt_normalize(field, length, marker)     minimr_field_normalize(field, length, marker); \
                                                             if (length != NULL) (*(length))--;
 
 /**
- * Reverse function of minimr_dns_normalize_field()
+ * Reverse function of minimr_field_normalize()
  * (field must be
  */
-void minimr_dns_denormalize_field(uint8_t * field, uint16_t length, uint8_t marker);
+void minimr_field_denormalize(uint8_t * field, uint16_t length, uint8_t marker);
+
+#define minimr_name_denormalize(field, length)          minimr_field_denormalize(field, length, '.')
+
+#define minimr_txt_denormalize(field, length, marker)   minimr_field_denormalize(field, length, marker)
 
 //uint8_t minimr_dns_name_len(uint16_t namepos, uint8_t * msg, uint16_t msglen, uint8_t * namelen, uint8_t * bytelen);
 
 /**
  * Lexicographic comparison of two NAMEs where the first MUST be uncompressed and the second CAN be compressed with given message bounds
  */
-int32_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen);
+int32_t minimr_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen);
 
 /**
  * Copies possibly compressed name to given destination and returns length of NUL-terminated string
  */
-int32_t minimr_dns_uncompress_name(uint8_t * uncompressed_name, uint16_t maxlen, uint16_t namepos, uint8_t * msg, uint8_t msglen);
+int32_t minimr_name_uncompress(uint8_t * uncompressed_name, uint16_t maxlen, uint16_t namepos, uint8_t * msg, uint8_t msglen);
 
 
 /*************** Generic framework functions **************/
 
+typedef enum {
+    minimr_msgtype_any,
+    minimr_msgtype_query,
+    minimr_msgtype_response
+} minimr_msgtype;
+
 // Used in RR handler to know in which section the RR is located
 // @see minimr_response_handler
 typedef enum  {
-    minimr_dns_rr_section_answer,
-    minimr_dns_rr_section_authority,
-    minimr_dns_rr_section_extra
-} minimr_dns_rr_section;
+    minimr_rr_section_answer,
+    minimr_rr_section_authority,
+    minimr_rr_section_extra
+} minimr_rr_section;
 
 struct minimr_filter {
     uint16_t type;
@@ -687,7 +697,7 @@ struct minimr_filter {
 };
 
 typedef uint8_t (*minimr_query_handler)(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * qstat, uint8_t * msg, uint16_t msglen, void * user_data);
-typedef uint8_t (*minimr_rr_handler)(struct minimr_dns_hdr * hdr, minimr_dns_rr_section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data);
+typedef uint8_t (*minimr_rr_handler)(struct minimr_dns_hdr * hdr, minimr_rr_section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data);
 
 /**
  * Tries to parse given mDNS message calling the (optional) handlers for each encountered query or RR
@@ -698,6 +708,7 @@ typedef uint8_t (*minimr_rr_handler)(struct minimr_dns_hdr * hdr, minimr_dns_rr_
  */
 int32_t minimr_parse_msg(
         uint8_t *msg, uint16_t msglen,
+        minimr_msgtype msgtype,
         minimr_query_handler qhandler, struct minimr_filter * qfilters, uint16_t nqfilters,
         minimr_rr_handler rrhandler, struct minimr_filter * rrfilters, uint16_t nrrfilters,
         void * user_data
