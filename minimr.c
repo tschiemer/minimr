@@ -455,7 +455,7 @@ int32_t  minimr_parse_msg(
 
     // ignore messages that are not long enough to even have a complete header
     if (msglen < MINIMR_DNS_HDR_SIZE){
-        return MINIMR_IGNORE;
+        return MINIMR_OK;
     }
 
     struct minimr_dns_hdr hdr;
@@ -463,6 +463,11 @@ int32_t  minimr_parse_msg(
     // read header info
     minimr_dns_hdr_read(&hdr, msg);
 
+    // if asked for specific type but other at hand, abort
+    if ((msgtype == minimr_msgtype_query && (hdr.flags[0] & MINIMR_DNS_HDR1_QR) == MINIMR_DNS_HDR1_QR_REPLY )
+        || (msgtype == minimr_msgtype_response && (hdr.flags[0] & MINIMR_DNS_HDR1_QR) == MINIMR_DNS_HDR1_QR_REPLY )){
+        return MINIMR_OK;
+    }
 
     uint16_t pos = MINIMR_DNS_HDR_SIZE;
 
