@@ -5,7 +5,7 @@
 #include "minimr.h"
 
 
-const uint8_t * minimr_dns_type_str(uint16_t type)
+const uint8_t * minimr_dns_type_tostr(uint16_t type)
 {
     switch (type) {
         case MINIMR_DNS_TYPE_ANY:       return (uint8_t*)"ANY";
@@ -19,23 +19,47 @@ const uint8_t * minimr_dns_type_str(uint16_t type)
     return (uint8_t*)"?";
 }
 
+const uint8_t * minimr_dns_class_tostr(uint16_t glass)
+{
+    switch (glass) {
+        case MINIMR_DNS_CLASS_ANY:       return (uint8_t*)"ANY";
+        case MINIMR_DNS_CLASS_IN:         return (uint8_t*)"IN";
+
+    }
+    return (uint8_t*)"?";
+}
+
 #define _seq1_(lhs, rhs) ( lhs[0] == rhs[0] )
-#define _seq2_(lhs, rhs) ( lhs[0] == rhs[0] )
-#define _seq3_(lhs, rhs) ( lhs[0] == rhs[0] )
-#define _seq4_(lhs, rhs) ( lhs[0] == rhs[0] )
+#define _seq2_(lhs, rhs) ( lhs[0] == rhs[0] && lhs[1] == rhs[1] )
+#define _seq3_(lhs, rhs) ( lhs[0] == rhs[0] && lhs[1] == rhs[1] && lhs[2] == rhs[2] )
+#define _seq4_(lhs, rhs) ( lhs[0] == rhs[0] && lhs[1] == rhs[1] && lhs[2] == rhs[2] && lhs[3] == rhs[4])
 
 uint16_t minimr_dns_type_fromstr(uint8_t * typestr)
 {
-    if (_seq3_(typestr, "ANY"))     return MINIMR_DNS_TYPE_ANY;
-    if (_seq1_(typestr, "A"))       return MINIMR_DNS_TYPE_A;
+    // in decreasing order of length
+
     if (_seq4_(typestr, "AAAA"))    return MINIMR_DNS_TYPE_AAAA;
+
+    if (_seq3_(typestr, "ANY"))     return MINIMR_DNS_TYPE_ANY;
     if (_seq3_(typestr, "SRV"))     return MINIMR_DNS_TYPE_SRV;
     if (_seq3_(typestr, "TXT"))     return MINIMR_DNS_TYPE_TXT;
     if (_seq3_(typestr, "PTR"))     return MINIMR_DNS_TYPE_PTR;
 
+    if (_seq1_(typestr, "A"))       return MINIMR_DNS_TYPE_A;
+
     MINIMR_DEBUGF("type not recognized! %s\n", typestr);
 
+    return 0;
+}
 
+
+uint16_t minimr_dns_class_fromstr(uint8_t * classstr)
+{
+    // in decreasing order of length
+    if (_seq3_(classstr, "ANY"))     return MINIMR_DNS_CLASS_ANY;
+    if (_seq2_(classstr, "IN"))       return MINIMR_DNS_CLASS_IN;
+
+    MINIMR_DEBUGF("class not recognized! %s\n", classstr);
 
     return 0;
 }
@@ -213,6 +237,13 @@ void minimr_dns_normalize_field(uint8_t * field, uint16_t * length, uint8_t mark
 {
     MINIMR_ASSERT(field != NULL);
 
+    // if first byte does not match marker, we assume the field has already been normalized
+    // note: this could the source of an error where the field to be normalized in fact was just wrongly formatted..
+    if (field[0] != marker){
+        MINIMR_DEBUGF("WARNING first byte of field to be normalized is not marker '%c' - assumed to be normalized alread\n", marker);
+        return;
+    }
+
     uint16_t i = 0;
 
     while(field[i] != '\0'){
@@ -247,10 +278,10 @@ void minimr_dns_denormalize_field(uint8_t * field, uint16_t length, uint8_t mark
     }
 }
 
-uint8_t minimr_dns_name_len(uint16_t namepos, uint8_t * msg, uint16_t msglen, uint8_t * namelen, uint8_t * bytelen)
-{
-    return MINIMR_OK;
-}
+//uint8_t minimr_dns_name_len(uint16_t namepos, uint8_t * msg, uint16_t msglen, uint8_t * namelen, uint8_t * bytelen)
+//{
+//    return MINIMR_OK;
+//}
 
 
 int32_t minimr_dns_name_cmp(uint8_t * uncompressed_name, uint16_t namepos, uint8_t * msg, uint16_t msglen)
@@ -405,16 +436,16 @@ int32_t minimr_dns_uncompress_name(uint8_t * uncompressed_name, uint16_t maxlen,
 }
 
 
-uint8_t minimr_parse_msg(
+int32_t  minimr_parse_msg(
         uint8_t *msg, uint16_t msglen,
-        minimr_query_handler qhandler, uint8_t **qfilter_names, uint16_t nqfilter_names,
-        minimr_rr_handler rrhandler, uint8_t **rrfilter_names, uint16_t nrrfilter_names,
+        minimr_query_handler qhandler, struct minimr_filter * qfilters, uint16_t nqfilters,
+        minimr_rr_handler rrhandler, struct minimr_filter * rrfilters, uint16_t nrrfilters,
         void * user_data
 )
 {
     MINIMR_ASSERT(msg != NULL);
-    MINIMR_ASSERT(nqfilter_names == 0 || qfilter_names != NULL);
-    MINIMR_ASSERT(nrrfilter_names == 0 || rrfilter_names != NULL);
+    MINIMR_ASSERT(nqfilters == 0 || qfilters != NULL);
+    MINIMR_ASSERT(nrrfilters == 0 || rrfilters != NULL);
     MINIMR_ASSERT(qhandler != NULL && rrhandler != NULL); // doesn't make any sense not to use any handler at all.
 
     MINIMR_DEBUGF("\nnew msg %p (len %d)\n", msg, msglen);
@@ -454,17 +485,33 @@ uint8_t minimr_parse_msg(
             continue;
         }
 
+
         uint8_t cont = MINIMR_CONTINUE;
 
-        if (nqfilter_names == 0){
-            cont = qhandler(&hdr, &qstat, msg, msglen, 0, user_data);
+        if (nqfilters == 0){
+            cont = qhandler(&hdr, &qstat, msg, msglen, user_data);
         } else {
 
-            for (uint16_t i = 0; i < nqfilter_names; i++){
+            for (uint16_t i = 0; i < nqfilters; i++){
 
-                if (minimr_dns_name_cmp(qfilter_names[i], qstat.name_offset, msg, msglen) == 0){
+                MINIMR_ASSERT(qfilters[i].name != NULL);
+
+                // type match?
+                if (qfilters[i].type != MINIMR_DNS_TYPE_ANY && qstat.type != MINIMR_DNS_TYPE_ANY && qfilters[i].type != qstat.type){
+                    continue;
+                }
+
+                // class match?
+                if (qfilters[i].fclass != MINIMR_DNS_CLASS_ANY && (qstat.unicast_class & MINIMR_DNS_QCLASS) != MINIMR_DNS_CLASS_ANY && qfilters[i].fclass != (qstat.unicast_class & MINIMR_DNS_QCLASS) ){
+                    continue;
+                }
+
+                if (minimr_dns_name_cmp(qfilters[i].name, qstat.name_offset, msg, msglen) == 0){
+
+                    qstat.match_i = i;
+
                     // pass to user rr handler
-                    cont = qhandler(&hdr, &qstat, msg, msglen, i, user_data);
+                    cont = qhandler(&hdr, &qstat, msg, msglen, user_data);
                 }
             }
         }
@@ -503,13 +550,11 @@ uint8_t minimr_parse_msg(
 
         // in case of a server fail, pass this along
         if (res == MINIMR_DNS_HDR2_RCODE_SERVAIL) {
-            MINIMR_DEBUGF("1\n");
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
         }
 
         if (res != MINIMR_OK){
             // we could respond that it was a faulty query..
-            MINIMR_DEBUGF("2\n");
             return MINIMR_DNS_HDR2_RCODE_FORMERR;
         }
 
@@ -524,14 +569,28 @@ uint8_t minimr_parse_msg(
         uint8_t cont = MINIMR_CONTINUE;
 
         // if any filter records were given, just look for these
-        if (nrrfilter_names == 0) {
-            cont = rrhandler(&hdr, section, &rstat, msg, msglen, 0, user_data);
+        if (nrrfilters == 0) {
+            cont = rrhandler(&hdr, section, &rstat, msg, msglen, user_data);
         } else {
-            for (uint16_t i = 0; i < nrrfilter_names; i++){
+            for (uint16_t i = 0; i < nrrfilters; i++){
 
-                if (minimr_dns_name_cmp(rrfilter_names[i], rstat.name_offset, msg, msglen) == 0){
+                MINIMR_ASSERT(rrfilters[i].name != NULL);
+
+                // type match?
+                if (rrfilters[i].type != MINIMR_DNS_TYPE_ANY && rrfilters[i].type != rstat.type){
+                    continue;
+                }
+                // class match?
+                if (rrfilters[i].fclass != MINIMR_DNS_CLASS_ANY && rrfilters[i].fclass != (rstat.cache_class & MINIMR_DNS_RRCLASS) ){
+                    continue;
+                }
+
+                if (minimr_dns_name_cmp(rrfilters[i].name, rstat.name_offset, msg, msglen) == 0){
+
+                    rstat.match_i = i;
+
                     // pass to user rr handler
-                    cont = rrhandler(&hdr, section, &rstat, msg, msglen, i, user_data);
+                    cont = rrhandler(&hdr, section, &rstat, msg, msglen, user_data);
                 }
             }
         }
@@ -545,7 +604,7 @@ uint8_t minimr_parse_msg(
     return MINIMR_OK;
 }
 
-uint8_t minimr_make_msg(
+int32_t  minimr_make_msg(
         uint16_t tid, uint8_t flag1, uint8_t flag2,
         struct minimr_dns_rr **records, uint16_t nrecords,
         uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
@@ -846,7 +905,7 @@ uint8_t minimr_handle_queries(
             // but let's remember this question and the matching record and let's go to the next question
 
             qstats[nq].relevant = 1;
-            qstats[nq].ir = ir;
+            qstats[nq].match_i = ir;
 
             nq++;
 
@@ -908,13 +967,13 @@ uint8_t minimr_handle_queries(
 
 
                     // if name lengths don't match, there's no point checking names
-                    res = minimr_dns_name_cmp(records[qstats[iq].ir]->name, qstats[iq].name_offset, msg, msglen);
+                    res = minimr_dns_name_cmp(records[qstats[iq].match_i]->name, qstats[iq].name_offset, msg, msglen);
 
                     if (res != 0) continue;
                 }
 
                 // so it's a match and we have to check wether it's up to date
-                struct minimr_dns_rr * rr = records[qstats[iq].ir];
+                struct minimr_dns_rr * rr = records[qstats[iq].match_i];
                 if (rr->fun(minimr_dns_rr_fun_type_respond_to, rr, &rstat, msg) == MINIMR_DO_NOT_RESPOND){
                     qstats[iq].relevant = 0;
                     remaining_nq--;
@@ -966,7 +1025,7 @@ uint8_t minimr_handle_queries(
             continue;
         }
 
-        struct minimr_dns_rr * rr = records[qstats[iq].ir];
+        struct minimr_dns_rr * rr = records[qstats[iq].match_i];
 
         uint16_t nrr = 0;
 
@@ -990,7 +1049,7 @@ uint8_t minimr_handle_queries(
             continue;
         }
 
-        struct minimr_dns_rr * rr = records[qstats[iq].ir];
+        struct minimr_dns_rr * rr = records[qstats[iq].match_i];
 
         uint16_t nrr = 0;
 
@@ -1014,7 +1073,7 @@ uint8_t minimr_handle_queries(
             continue;
         }
 
-        struct minimr_dns_rr * rr = records[qstats[iq].ir];
+        struct minimr_dns_rr * rr = records[qstats[iq].match_i];
 
         uint16_t nrr = 0;
 

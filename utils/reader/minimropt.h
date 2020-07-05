@@ -18,7 +18,7 @@
 #define MINIMR_ASSERT(x) assert(x)
 
 // optional
-#define MINIMR_DEBUGF(...) fprintf(stderr, __VA_ARGS__)
+//#define MINIMR_DEBUGF(...) fprintf(stderr, __VA_ARGS__)
 
 
 #endif //MINIMR_MINIMROPT_H
