@@ -52,8 +52,6 @@ void add_filter(char * str, std::vector<struct minimr_filter> &filters){
 
     if (2 == sscanf(str, "%[0-9A-Z] %[0-9A-Z] %n.", tmptype, tmpclass, &n)){
 
-        printf("2 remains %d [%s]\n", n, &str[n]);
-
         filter.type = minimr_dns_type_fromstr((uint8_t*)tmptype);
 
         if (filter.type == 0){
@@ -77,8 +75,6 @@ void add_filter(char * str, std::vector<struct minimr_filter> &filters){
         pname = &str[n];
 
     } else if (1 == sscanf(str, "%[0-9A-Z] %n", tmptype, &n)){
-
-        printf("1 remains %d [%s]\n", n, &str[n]);
 
         filter.type = minimr_dns_type_fromstr((uint8_t*)tmptype);
 
@@ -104,7 +100,7 @@ void add_filter(char * str, std::vector<struct minimr_filter> &filters){
 
     filter.name = (uint8_t*)pname;
 
-        printf("query type = %s (%d), class = %s (%d), name = %s\n", minimr_dns_type_tostr(filter.type), filter.type, minimr_dns_class_tostr(filter.fclass), filter.fclass, filter.name);
+//        printf("query type = %s (%d), class = %s (%d), name = %s\n", minimr_dns_type_tostr(filter.type), filter.type, minimr_dns_class_tostr(filter.fclass), filter.fclass, filter.name);
 
     minimr_name_normalize((uint8_t*)pname, NULL);
 
