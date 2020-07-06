@@ -92,10 +92,10 @@ extern "C" {
 #define MINIMR_DNS_TYPE_ANY         255 // wildcard
 
 #define MINIMR_DNS_TYPE_A           1   // ipv4 addr
-#define MINIMR_DNS_TYPE_AAAA        28  // ipv6 addr
-#define MINIMR_DNS_TYPE_PTR         12  // generic ptr
-#define MINIMR_DNS_TYPE_SRV         33  // service
 #define MINIMR_DNS_TYPE_TXT         16  // options
+#define MINIMR_DNS_TYPE_AAAA        28  // ipv6 addr
+#define MINIMR_DNS_TYPE_SRV         33  // service
+#define MINIMR_DNS_TYPE_PTR         12  // generic ptr
 
 // likely not used
 #define MINIMR_DNS_TYPE_AFSDB       18
@@ -492,7 +492,8 @@ typedef enum  {
     minimr_rr_fun_query_get_extra_rrs,
     minimr_rr_fun_get_rr,
     minimr_rr_fun_announce_get_rr,
-    minimr_rr_fun_announce_get_extra_rrs
+    minimr_rr_fun_announce_get_extra_rrs,
+    minimr_rr_fun_lexcmp
 } minimr_rr_fun;
 
 #define MINIMR_RR_FUN_IS_VALID( type ) \
@@ -502,7 +503,8 @@ typedef enum  {
     (type) == minimr_rr_fun_query_get_extra_rrs || \
     (type) == minimr_rr_fun_get_rr || \
     (type) == minimr_rr_fun_announce_get_rr || \
-    (type) == minimr_rr_fun_announce_get_extra_rrs)
+    (type) == minimr_rr_fun_announce_get_extra_rrs || \
+    (type) == minimr_rr_fun_lexcmp)
 
 // used internally to get the extra compiler argc check
 #define MINIMR_RR_FUN_QUERY_RESPOND_TO( rr, user_data )                                             handler(minimr_rr_fun_query_respond_to, rr, user_data)
@@ -512,6 +514,7 @@ typedef enum  {
 #define MINIMR_RR_FUN_GET_RR( rr, outmsg, outlen, outmsgmaxlen, nrr, user_data )                    handler(minimr_rr_fun_get_rr, rr, outmsg, outlen, outmsgmaxlen, nrr, user_data)
 #define MINIMR_RR_FUN_ANNOUNCE_GET_RR( rr, outmsg, outlen, outmsgmaxlen, nrr, user_data )           handler(minimr_rr_fun_announce_get_rr, rr, outmsg, outlen, outmsgmaxlen, nrr, user_data)
 #define MINIMR_RR_FUN_ANNOUNCE_GET_EXTRA_RRS( rr, outmsg, outlen, outmsgmaxlen, nrr, user_data )    handler(minimr_rr_fun_announce_get_extra_rrs, rr, outmsg, outlen, outmsgmaxlen, nrr, user_data)
+#define MINIMR_RR_FUN_LEXCMP( rr, _class_, type, data, dlength, user_data )                         handler(minimr_rr_fun_lexcmp, rr, _class_, type, data, dlength, user_data )
 
 
 /**
@@ -520,7 +523,7 @@ typedef enum  {
  * minimr_rr_fun_handler( minimr_rr_fun_get_rr, struct minimr_rr * rr,  uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
  * minimr_rr_fun_handler( minimr_rr_fun_announce_get_*, struct minimr_rr * rr, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
  */
-typedef int (*minimr_rr_fun_handler)(minimr_rr_fun type, struct minimr_rr *rr, ...);
+typedef int32_t (*minimr_rr_fun_handler)(minimr_rr_fun type, struct minimr_rr *rr, ...);
 
 
 // Start of named RR struct definer

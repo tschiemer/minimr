@@ -228,7 +228,7 @@ int8_t minimr_dns_rr_lexcmp(uint16_t lhsclass, uint16_t lhstype, uint8_t * lhsrd
 
     //
     if (lhsrdatalen < rhsrdatalen) return -1;
-    if (lhsrdatalen < rhsrdatalen) return 1;
+    if (lhsrdatalen > rhsrdatalen) return 1;
 
     return 0;
 }

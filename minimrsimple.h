@@ -19,22 +19,27 @@ extern "C" {
 
 #if MINIMR_RR_TYPE_A_DEFAULT
 extern minimr_rr_a minimr_simple_rr_a;
+#define MINIMR_SIMPLE_A_INDEX 0
 #endif
 
 #if MINIMR_RR_TYPE_AAAA_DEFAULT
 extern minimr_rr_aaaa minimr_simple_rr_aaaa;
-#endif
-
-#if MINIMR_RR_TYPE_PTR_DEFAULT
-extern minimr_rr_ptr minimr_simple_rr_ptr;
+#define MINIMR_SIMPLE_AAAA_INDEX MINIMR_RR_TYPE_A_DEFAULT
 #endif
 
 #if MINIMR_RR_TYPE_SRV_DEFAULT
 extern minimr_rr_srv minimr_simple_rr_srv;
+#define MINIMR_SIMPLE_SRV_INDEX (MINIMR_RR_TYPE_A_DEFAULT + MINIMR_RR_TYPE_AAAA_DEFAULT)
 #endif
 
 #if MINIMR_RR_TYPE_TXT_DEFAULT
 extern minimr_rr_txt minimr_simple_rr_txt;
+#define MINIMR_SIMPLE_TXT_INDEX (MINIMR_RR_TYPE_A_DEFAULT + MINIMR_RR_TYPE_AAAA_DEFAULT + MINIMR_RR_TYPE_SRV_DEFAULT)
+#endif
+
+#if MINIMR_RR_TYPE_PTR_DEFAULT
+extern minimr_rr_ptr minimr_simple_rr_ptr;
+#define MINIMR_SIMPLE_PTR_INDEX (MINIMR_RR_TYPE_A_DEFAULT + MINIMR_RR_TYPE_AAAA_DEFAULT + MINIMR_RR_TYPE_SRV_DEFAULT + MINIMR_RR_TYPE_TXT_DEFAULT)
 #endif
 
 extern struct minimr_rr * minimr_simple_rr_set[MINIMR_RR_TYPE_DEFAULT_COUNT];
@@ -54,14 +59,19 @@ struct minimr_simple_init_st {
 
     /**
      * If false (no probing) the records are assumed to be unique. There will be no probing phase.
-     * If true (probing) probing_end_timer and reconfiguration_needed are required.
+     * If true (probing) probing_end_timer, restart_in_1sec and reconfiguration_needed are required.
      */
     uint8_t probe_or_not;
 
     /**
-     *
+     * called when minimr_simple_probing_end_timer_callback() is to be called
      */
-    void (*probing_end_timer)(uint16_t msec); // called when minimr_simple_probing_end_timer_callback() is to be called
+    void (*probing_end_timer)(uint16_t msec); //
+
+    /**
+     * Called by probe tiebreaker: when called host is requested to execute minimr_simple_start() again after 1 second
+     */
+    void (*restart_in_1sec)();
 
     /**
      * Notification to host that there is a name conflict and reconfiguration is needed.

@@ -47,22 +47,6 @@ minimr_rr_aaaa minimr_simple_rr_aaaa = {
 };
 #endif
 
-#if MINIMR_RR_TYPE_PTR_DEFAULT
-minimr_rr_ptr minimr_simple_rr_ptr = {
-    .type = MINIMR_DNS_TYPE_PTR,
-    .ttl = MINIMR_DEFAULT_TTL,
-    .handler = simple_rr_handler,
-
-#ifdef MINIMR_SIMPLE_SERVICEPTR
-    .name = MINIMR_SIMPLE_SERVICEPTR,
-#endif
-
-#ifdef MINIMR_SIMPLE_HOSTNAME
-    .domain = MINIMR_SIMPLE_HOSTNAME
-#endif
-
-};
-#endif
 
 #if MINIMR_RR_TYPE_SRV_DEFAULT
 minimr_rr_srv minimr_simple_rr_srv = {
@@ -110,6 +94,24 @@ minimr_rr_txt minimr_simple_rr_txt = {
 };
 #endif
 
+
+#if MINIMR_RR_TYPE_PTR_DEFAULT
+minimr_rr_ptr minimr_simple_rr_ptr = {
+        .type = MINIMR_DNS_TYPE_PTR,
+        .ttl = MINIMR_DEFAULT_TTL,
+        .handler = simple_rr_handler,
+
+#ifdef MINIMR_SIMPLE_SERVICEPTR
+        .name = MINIMR_SIMPLE_SERVICEPTR,
+#endif
+
+#ifdef MINIMR_SIMPLE_HOSTNAME
+        .domain = MINIMR_SIMPLE_HOSTNAME
+#endif
+
+};
+#endif
+
 struct minimr_rr * minimr_simple_rr_set[MINIMR_RR_TYPE_DEFAULT_COUNT] = {
 #if MINIMR_RR_TYPE_A_DEFAULT
         (struct minimr_rr *)&minimr_simple_rr_a,
@@ -117,15 +119,14 @@ struct minimr_rr * minimr_simple_rr_set[MINIMR_RR_TYPE_DEFAULT_COUNT] = {
 #if MINIMR_RR_TYPE_AAAA_DEFAULT
         (struct minimr_rr *)&minimr_simple_rr_aaaa,
 #endif
-#if MINIMR_RR_TYPE_PTR_DEFAULT
-        (struct minimr_rr *)&minimr_simple_rr_ptr,
-
-#endif
 #if MINIMR_RR_TYPE_SRV_DEFAULT
         (struct minimr_rr *)&minimr_simple_rr_srv,
 #endif
 #if MINIMR_RR_TYPE_TXT_DEFAULT
         (struct minimr_rr *)&minimr_simple_rr_txt,
+#endif
+#if MINIMR_RR_TYPE_PTR_DEFAULT
+        (struct minimr_rr *)&minimr_simple_rr_ptr,
 #endif
 };
 
@@ -138,6 +139,18 @@ typedef enum {
     simple_state_stopped
 } simple_state_t;
 
+typedef struct {
+    uint8_t seen;
+    int8_t cmp;
+    struct minimr_rr * rr;
+} simple_tie_t;
+
+typedef struct {
+    uint8_t conflict;
+    uint8_t nties;
+    simple_tie_t ties[MINIMR_RR_TYPE_DEFAULT_COUNT];
+} simple_tie_breaker_t;
+
 static volatile simple_state_t simple_state;
 static uint8_t simple_announcement_count;
 
@@ -148,19 +161,19 @@ void minimr_simple_set_ips(uint8_t * ipv4, uint16_t * ipv6)
 {
 #if MINIMR_RR_TYPE_A_DEFAULT
     if (ipv4 == NULL){
-        minimr_simple_rr_set[0] = NULL;
+        minimr_simple_rr_set[MINIMR_SIMPLE_A_INDEX] = NULL;
     } else {
         minimr_simple_rr_a.ipv4[0] = ipv4[0];
         minimr_simple_rr_a.ipv4[1] = ipv4[1];
         minimr_simple_rr_a.ipv4[2] = ipv4[2];
         minimr_simple_rr_a.ipv4[3] = ipv4[3];
-        minimr_simple_rr_set[0] = (struct minimr_rr *)&minimr_simple_rr_a;
+        minimr_simple_rr_set[MINIMR_SIMPLE_A_INDEX] = (struct minimr_rr *)&minimr_simple_rr_a;
     }
 #endif
 
 #if MINIMR_RR_TYPE_AAAA_DEFAULT
     if (ipv6 == NULL){
-        minimr_simple_rr_set[MINIMR_RR_TYPE_A_DEFAULT] = NULL;
+        minimr_simple_rr_set[MINIMR_SIMPLE_AAAA_INDEX] = NULL;
     } else {
         minimr_simple_rr_aaaa.ipv6[0] = ipv6[0];
         minimr_simple_rr_aaaa.ipv6[1] = ipv6[1];
@@ -170,7 +183,7 @@ void minimr_simple_set_ips(uint8_t * ipv4, uint16_t * ipv6)
         minimr_simple_rr_aaaa.ipv6[5] = ipv6[5];
         minimr_simple_rr_aaaa.ipv6[6] = ipv6[6];
         minimr_simple_rr_aaaa.ipv6[7] = ipv6[7];
-        minimr_simple_rr_set[MINIMR_RR_TYPE_A_DEFAULT] = (struct minimr_rr *)&minimr_simple_rr_aaaa;
+        minimr_simple_rr_set[MINIMR_SIMPLE_AAAA_INDEX] = (struct minimr_rr *)&minimr_simple_rr_aaaa;
     }
 #endif
 }
@@ -180,6 +193,7 @@ void minimr_simple_init(struct minimr_simple_init_st * init_st)
 {
     MINIMR_ASSERT(init_st != NULL);
     MINIMR_ASSERT(init_st->probe_or_not == 0 || init_st->probing_end_timer != NULL);
+    MINIMR_ASSERT(init_st->probe_or_not == 0 || init_st->restart_in_1sec != NULL);
     MINIMR_ASSERT(init_st->probe_or_not == 0 || init_st->reconfiguration_needed != NULL);
     MINIMR_ASSERT(init_st->announcement_count <= 8);
     MINIMR_ASSERT(init_st->announcement_count < 2 || init_st->announcement_timer != NULL);
@@ -188,6 +202,7 @@ void minimr_simple_init(struct minimr_simple_init_st * init_st)
 
     simple_cfg.probe_or_not = init_st->probe_or_not;
     simple_cfg.probing_end_timer = init_st->probing_end_timer;
+    simple_cfg.restart_in_1sec = init_st->restart_in_1sec;
     simple_cfg.reconfiguration_needed = init_st->reconfiguration_needed;
 
     simple_cfg.announcement_count = init_st->announcement_count;
@@ -211,10 +226,6 @@ void minimr_simple_init(struct minimr_simple_init_st * init_st)
 #if MINIMR_RR_TYPE_AAAA_DEFAULT
     minimr_name_normalize(minimr_simple_rr_aaaa.name, &minimr_simple_rr_aaaa.name_length);
 #endif
-#if MINIMR_RR_TYPE_PTR_DEFAULT
-    minimr_name_normalize(minimr_simple_rr_ptr.name, &minimr_simple_rr_ptr.name_length);
-    minimr_name_normalize(minimr_simple_rr_ptr.domain, &minimr_simple_rr_ptr.domain_length);
-#endif
 #if MINIMR_RR_TYPE_SRV_DEFAULT
     minimr_name_normalize(minimr_simple_rr_srv.name, &minimr_simple_rr_srv.name_length);
     minimr_name_normalize(minimr_simple_rr_srv.target, &minimr_simple_rr_srv.target_length);
@@ -222,6 +233,10 @@ void minimr_simple_init(struct minimr_simple_init_st * init_st)
 #if MINIMR_RR_TYPE_TXT_DEFAULT
     minimr_name_normalize(minimr_simple_rr_txt.name, &minimr_simple_rr_txt.name_length);
     minimr_txt_normalize(minimr_simple_rr_txt.txt, &minimr_simple_rr_txt.txt_length, MINIMR_SIMPLE_SERVICE_TXTMARKER);
+#endif
+#if MINIMR_RR_TYPE_PTR_DEFAULT
+    minimr_name_normalize(minimr_simple_rr_ptr.name, &minimr_simple_rr_ptr.name_length);
+    minimr_name_normalize(minimr_simple_rr_ptr.domain, &minimr_simple_rr_ptr.domain_length);
 #endif
 }
 
@@ -299,6 +314,7 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
     }
 
     if (simple_state == simple_state_probe){
+
         int32_t res = minimr_simple_probequery_msg(outmsg, outmsglen, outmsgmaxlen, 0); // 0 -> no unicast requested
 
         if (res != MINIMR_OK){
@@ -323,12 +339,12 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
 
             }
 #if MINIMR_RR_TYPE_A_DEFAULT
-            else if (minimr_simple_rr_set[0] != NULL){
+            else if (minimr_simple_rr_set[MINIMR_SIMPLE_A_INDEX] != NULL){
                 filters[0].name = minimr_simple_rr_a.name;
                 filters[0].name_length = minimr_simple_rr_a.name_length;
             }
 #elif MINIMR_RR_TYPE_AAAA_DEFAULT
-            else if (minimr_simple_rr_set[MINIMR_RR_TYPE_A_DEFAULT] != NULL){
+            else if (minimr_simple_rr_set[MINIMR_SIMPLE_AAAA_INDEX] != NULL){
                 filters[0].name = minimr_simple_rr_aaaa.name;
                 filters[0].name_length = minimr_simple_rr_aaaa.name_length;
             }
@@ -358,14 +374,90 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
 
             // we use the same filters for the query and records sections
 
-            int32_t res = minimr_parse_msg(msg, msglen, minimr_msgtype_any, simple_probe_qhandler, filters, nfilters, simple_probe_rrhandler, filters, nfilters, NULL);
+            simple_tie_breaker_t tiebreaker;
+
+            tiebreaker.nties = 0;
+
+            // added in lexicographic order of types (! see tiebreaker below)
+
+#if MINIMR_RR_TYPE_A_DEFAULT
+            if (minimr_simple_rr_set[MINIMR_SIMPLE_A_INDEX] != NULL){
+                tiebreaker.ties[0].seen = 0;
+                tiebreaker.ties[0].rr = (struct minimr_rr*)&minimr_simple_rr_a;
+                tiebreaker.nties++;
+            }
+#endif
+
+#if MINIMR_RR_TYPE_TXT_DEFAULT
+            if (minimr_simple_rr_set[MINIMR_SIMPLE_TXT_INDEX] != NULL){
+                tiebreaker.ties[tiebreaker.nties].seen = 0;
+                tiebreaker.ties[tiebreaker.nties].rr = (struct minimr_rr*)&minimr_simple_rr_txt;
+                tiebreaker.nties++;
+            }
+#endif
+
+#if MINIMR_RR_TYPE_AAAA_DEFAULT
+            if (minimr_simple_rr_set[MINIMR_SIMPLE_AAAA_INDEX] != NULL){
+                tiebreaker.ties[tiebreaker.nties].seen = 0;
+                tiebreaker.ties[tiebreaker.nties].rr = (struct minimr_rr*)&minimr_simple_rr_aaaa;
+                tiebreaker.nties++;
+            }
+#endif
+
+#if MINIMR_RR_TYPE_SRV_DEFAULT
+            if (minimr_simple_rr_set[MINIMR_SIMPLE_SRV_INDEX] != NULL){
+                tiebreaker.ties[tiebreaker.nties].seen = 0;
+                tiebreaker.ties[tiebreaker.nties].rr = (struct minimr_rr*)&minimr_simple_rr_srv;
+                tiebreaker.nties++;
+            }
+#endif
+
+
+            tiebreaker.conflict = 0;
+
+            int32_t res = minimr_parse_msg(msg, msglen, minimr_msgtype_any, NULL, NULL, 0, simple_probe_rrhandler, filters, nfilters, &tiebreaker);
 
             if (res != MINIMR_OK){
                 MINIMR_DEBUGF("parse failed %d -> stopping\n", res);
                 simple_state = simple_state_stopped;
+                return res;
             }
 
-            return res;
+            // if the state was changed in the mean time (ex. because there was another an authorative answer), we're implicitly done
+            if (simple_state != simple_state_await_probe_response){
+                return MINIMR_OK;
+            }
+
+            // if no conflict there's nothing to be done.
+            if (tiebreaker.conflict == 0){
+                return MINIMR_OK;
+            }
+
+            // compare
+            for (uint8_t i = 0; i < tiebreaker.nties; i++){
+                if (tiebreaker.ties[i].seen){
+                    if (tiebreaker.ties[i].cmp > 0){
+                        // we win, nothing to do
+                    } else {
+                        // we lose
+                        simple_state = simple_state_stopped;
+                        simple_cfg.restart_in_1sec();
+                        return MINIMR_OK;
+                    }
+                }
+            }
+
+            uint16_t other_nauthrr = MINIMR_DNS_HDR_READ_NAUTHRR(msg);
+            if (tiebreaker.nties < other_nauthrr){
+                // we win, nothing to
+            } else {
+                // we lose
+                simple_state = simple_state_stopped;
+                simple_cfg.restart_in_1sec();
+            }
+
+
+            return MINIMR_OK;
         }
     }
 
@@ -431,7 +523,22 @@ int32_t minimr_simple_probequery_msg(
     servicename = minimr_simple_rr_txt.name;
 #endif
 
-    return minimr_probequery_msg(hostname, servicename, minimr_simple_rr_set, MINIMR_RR_TYPE_DEFAULT_COUNT, outmsg, outmsglen, outmsgmaxlen, request_unicast,  NULL);
+
+#if MINIMR_RR_TYPE_PTR_DEFAULT
+    // do not add PTR record to probequery
+    void * ptr = minimr_simple_rr_set[MINIMR_SIMPLE_PTR_INDEX];
+    minimr_simple_rr_set[MINIMR_SIMPLE_PTR_INDEX] = NULL;
+#endif
+
+    int32_t res = minimr_probequery_msg(hostname, servicename, minimr_simple_rr_set, MINIMR_RR_TYPE_DEFAULT_COUNT, outmsg, outmsglen, outmsgmaxlen, request_unicast,  NULL);
+
+
+#if MINIMR_RR_TYPE_PTR_DEFAULT
+    // restore previous state
+    minimr_simple_rr_set[MINIMR_SIMPLE_PTR_INDEX] = ptr;
+#endif
+
+    return res;
 }
 
 int32_t minimr_simple_announce_msg(
@@ -478,8 +585,6 @@ uint8_t simple_probe_qhandler(struct minimr_dns_hdr * hdr, struct minimr_query_s
 
     // ergo, it might be another host trying to claim the same names!
 
-    // TODO
-
     return MINIMR_CONTINUE;
 }
 
@@ -502,7 +607,21 @@ uint8_t simple_probe_rrhandler(struct minimr_dns_hdr * hdr, minimr_rr_section se
 
     //so it's a query and we might have to do the whole tie-breaking procedure..
 
-    // TODO tie breaking
+    simple_tie_breaker_t * tiebreaker = (simple_tie_breaker_t*)user_data;
+
+    for(int i = 0; i < tiebreaker->nties; i++){
+        if (minimr_name_cmp(tiebreaker->ties[i].rr->name, rstat->name_offset, msg, msglen) == 0){
+
+            tiebreaker->ties[i].seen = 1;
+            tiebreaker->ties[i].cmp = tiebreaker->ties[i].rr->MINIMR_RR_FUN_LEXCMP(tiebreaker->ties[i].rr, rstat->cache_class, rstat->type, &msg[rstat->data_offset], rstat->dlength, NULL);
+
+            if (tiebreaker->ties[i].cmp != 0){
+                tiebreaker->conflict = 1;
+            }
+
+            return MINIMR_CONTINUE;
+        }
+    }
 
     return MINIMR_CONTINUE;
 }
@@ -522,7 +641,14 @@ int32_t simple_rr_handler(minimr_rr_fun fun, struct minimr_rr *rr, ...)
     uint8_t unicast_requested;
     void * user_data;
 
+    //
+    uint16_t rclass;
+    uint16_t rtype;
+    uint8_t * rdata;
+    uint16_t rdlength;
+
     switch(fun){
+
 
         //minimr_rr_fun_handler( minimquery_get_*, struct minimr_rr * rr, struct minimr_query_stat * qstat, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
         case minimr_rr_fun_query_get_rr:
@@ -545,6 +671,16 @@ int32_t simple_rr_handler(minimr_rr_fun fun, struct minimr_rr *rr, ...)
         // minimr_rr_fun_handler( minimr_rr_fun_query_respond_to, struct minimr_rr * rr, void * user_data);
         case minimr_rr_fun_query_respond_to:
             user_data = va_arg(args, void*);
+            break;
+
+
+        case minimr_rr_fun_lexcmp:
+            rclass = va_arg(args, int32_t);
+            rtype = va_arg(args, int32_t);
+            rdata = va_arg(args, uint8_t*);
+            rdlength = va_arg(args, int32_t);
+            user_data = va_arg(args, void*);
+            break;
     }
 
     va_end(args);
@@ -654,12 +790,12 @@ int32_t simple_rr_handler(minimr_rr_fun fun, struct minimr_rr *rr, ...)
 
 #if MINIMR_RR_TYPE_A_DEFAULT && MINIMR_RR_TYPE_AAAA_DEFAULT
         // if type A was queried but we also have an AAAA type (which is set) add the AAAA record as extra
-        if (rr->type == MINIMR_DNS_TYPE_A && qstat->type == MINIMR_DNS_TYPE_AAAA && minimr_simple_rr_set[1] != NULL){
+        if (rr->type == MINIMR_DNS_TYPE_A && qstat->type == MINIMR_DNS_TYPE_AAAA && minimr_simple_rr_set[MINIMR_SIMPLE_A_INDEX] != NULL){
             if (simple_rr_handler(minimr_rr_fun_get_rr, (struct minimr_rr *)&minimr_simple_rr_aaaa, qstat, outmsg, outmsglen, outmsgmaxlen, NULL) != MINIMR_OK) return MINIMR_NOT_OK;
             n++;
         }
         // and vice versa
-        if (rr->type == MINIMR_DNS_TYPE_AAAA && qstat->type == MINIMR_DNS_TYPE_A && minimr_simple_rr_set[1] != NULL){
+        if (rr->type == MINIMR_DNS_TYPE_AAAA && qstat->type == MINIMR_DNS_TYPE_A && minimr_simple_rr_set[MINIMR_SIMPLE_AAAA_INDEX] != NULL){
             if (simple_rr_handler(minimr_rr_fun_get_rr, (struct minimr_rr *)&minimr_simple_rr_a, qstat, outmsg, outmsglen, outmsgmaxlen, NULL) != MINIMR_OK) return MINIMR_NOT_OK;
             n++;
         }
@@ -672,25 +808,31 @@ int32_t simple_rr_handler(minimr_rr_fun fun, struct minimr_rr *rr, ...)
             // this only works because we the actual records are referencable
 #if MINIMR_RR_TYPE_A_DEFAULT
             // only pass A record if set
-            if (minimr_simple_rr_set[0] != NULL){
+            if (minimr_simple_rr_set[MINIMR_SIMPLE_A_INDEX] != NULL){
                 if (simple_rr_handler(minimr_rr_fun_get_rr, (struct minimr_rr *)&minimr_simple_rr_a, qstat, outmsg, outmsglen, outmsgmaxlen, NULL) != MINIMR_OK) return MINIMR_NOT_OK;
                 n++;
             }
 #endif
 #if MINIMR_RR_TYPE_AAAA_DEFAULT
             // only pass AAAA record if set
-            if (minimr_simple_rr_set[MINIMR_RR_TYPE_A_DEFAULT] != NULL){
+            if (minimr_simple_rr_set[MINIMR_SIMPLE_AAAA_INDEX] != NULL){
                 if (simple_rr_handler(minimr_rr_fun_get_rr, (struct minimr_rr *)&minimr_simple_rr_aaaa, qstat, outmsg, outmsglen, outmsgmaxlen, NULL) != MINIMR_OK) return MINIMR_NOT_OK;
                 n++;
             }
 #endif
 #if MINIMR_RR_TYPE_SRV_DEFAULT
-            if (simple_rr_handler(minimr_rr_fun_get_rr, (struct minimr_rr *)&minimr_simple_rr_srv, qstat, outmsg, outmsglen, outmsgmaxlen, NULL) != MINIMR_OK) return MINIMR_NOT_OK;
-            n++;
+            if (minimr_simple_rr_set[MINIMR_SIMPLE_SRV_INDEX] != NULL){
+                if (simple_rr_handler(minimr_rr_fun_get_rr, (struct minimr_rr *)&minimr_simple_rr_srv, qstat, outmsg, outmsglen, outmsgmaxlen, NULL) != MINIMR_OK) return MINIMR_NOT_OK;
+                n++;
+            }
 #endif
 #if MINIMR_RR_TYPE_TXT_DEFAULT
-            if (simple_rr_handler(minimr_rr_fun_get_rr, (struct minimr_rr *)&minimr_simple_rr_txt, qstat, outmsg, outmsglen, outmsgmaxlen, NULL) != MINIMR_OK) return MINIMR_NOT_OK;
-            n++;
+            if (minimr_simple_rr_set[MINIMR_SIMPLE_TXT_INDEX] != NULL) {
+                if (simple_rr_handler(minimr_rr_fun_get_rr, (struct minimr_rr *) &minimr_simple_rr_txt, qstat, outmsg,
+                                      outmsglen, outmsgmaxlen, NULL) != MINIMR_OK)
+                    return MINIMR_NOT_OK;
+                n++;
+            }
 #endif
         }
 #endif //MINIMR_RR_TYPE_PTR_DEFAULT
@@ -706,6 +848,128 @@ int32_t simple_rr_handler(minimr_rr_fun fun, struct minimr_rr *rr, ...)
     if (fun == minimr_rr_fun_announce_get_extra_rrs){
         // do nothing (note: to keep things simple all announcement records will be in the normal answer section and not in the extra RR section; see above)
         return MINIMR_OK;
+    }
+
+    if (fun == minimr_rr_fun_lexcmp){
+
+
+        if ( (rr->cache_class & MINIMR_DNS_QCLASS) < (rclass & MINIMR_DNS_QCLASS)) return -1;
+        if ( (rr->cache_class & MINIMR_DNS_QCLASS) > (rclass & MINIMR_DNS_QCLASS)) return 1;
+
+        if ( rr->type < rtype) return -1;
+        if ( rr->type > rtype ) return 1;
+
+        if (rr->type == MINIMR_DNS_TYPE_A){
+
+            // if rdlength is faulty, we win
+            if (rdlength != 4){
+                return -1;
+            }
+
+            // we should do sanity checking here for rdlength match
+            if (((minimr_rr_a*)rr)->ipv4[0] < rdata[0]) return -1;
+            if (((minimr_rr_a*)rr)->ipv4[0] > rdata[0]) return 1;
+            if (((minimr_rr_a*)rr)->ipv4[1] < rdata[1]) return -1;
+            if (((minimr_rr_a*)rr)->ipv4[1] > rdata[1]) return 1;
+            if (((minimr_rr_a*)rr)->ipv4[2] < rdata[2]) return -1;
+            if (((minimr_rr_a*)rr)->ipv4[2] > rdata[2]) return 1;
+            if (((minimr_rr_a*)rr)->ipv4[3] < rdata[3]) return -1;
+            if (((minimr_rr_a*)rr)->ipv4[3] > rdata[3]) return 1;
+
+            return 0;
+        }
+
+        if (rr->type == MINIMR_DNS_TYPE_AAAA){
+
+            // if rdlength is faulty, we win
+            if (rdlength != 16){
+                return -1;
+            }
+
+            uint16_t u16;
+
+            u16 = (rdata[0] << 8) | rdata[1];
+            if (((minimr_rr_aaaa*)rr)->ipv6[0] < u16) return -1;
+            if (((minimr_rr_aaaa*)rr)->ipv6[0] > u16) return 1;
+            u16 = (rdata[2] << 8) | rdata[3];
+            if (((minimr_rr_aaaa*)rr)->ipv6[1] < u16) return -1;
+            if (((minimr_rr_aaaa*)rr)->ipv6[1] > u16) return 1;
+            u16 = (rdata[4] << 8) | rdata[5];
+            if (((minimr_rr_aaaa*)rr)->ipv6[2] < u16) return -1;
+            if (((minimr_rr_aaaa*)rr)->ipv6[2] > u16) return 1;
+            u16 = (rdata[6] << 8) | rdata[7];
+            if (((minimr_rr_aaaa*)rr)->ipv6[3] < u16) return -1;
+            if (((minimr_rr_aaaa*)rr)->ipv6[3] > u16) return 1;
+            u16 = (rdata[8] << 8) | rdata[9];
+            if (((minimr_rr_aaaa*)rr)->ipv6[4] < u16) return -1;
+            if (((minimr_rr_aaaa*)rr)->ipv6[4] > u16) return 1;
+            u16 = (rdata[10] << 8) | rdata[11];
+            if (((minimr_rr_aaaa*)rr)->ipv6[5] < u16) return -1;
+            if (((minimr_rr_aaaa*)rr)->ipv6[5] > u16) return 1;
+            u16 = (rdata[12] << 8) | rdata[13];
+            if (((minimr_rr_aaaa*)rr)->ipv6[6] < u16) return -1;
+            if (((minimr_rr_aaaa*)rr)->ipv6[6] > u16) return 1;
+            u16 = (rdata[14] << 8) | rdata[15];
+            if (((minimr_rr_aaaa*)rr)->ipv6[7] < u16) return -1;
+            if (((minimr_rr_aaaa*)rr)->ipv6[7] > u16) return 1;
+
+            return 0;
+        }
+
+        if (rr->type == MINIMR_DNS_TYPE_SRV){
+
+            // if rdlength is faulty, we win
+            if (rdlength < 6){
+                return -1;
+            }
+
+            uint16_t u16;
+
+            u16 = (rdata[0] << 8) | rdata[1];
+            if (((minimr_rr_srv*)rr)->priority < u16) return -1;
+            if (((minimr_rr_srv*)rr)->priority > u16) return 1;
+
+            u16 = (rdata[2] << 8) | rdata[3];
+            if (((minimr_rr_srv*)rr)->weight < u16) return -1;
+            if (((minimr_rr_srv*)rr)->weight > u16) return 1;
+
+            u16 = (rdata[4] << 8) | rdata[5];
+            if (((minimr_rr_srv*)rr)->port < u16) return -1;
+            if (((minimr_rr_srv*)rr)->port > u16) return 1;
+
+            uint16_t len = ((minimr_rr_srv*)rr)->target_length + 6 < rdlength ? ((minimr_rr_srv*)rr)->target_length : rdlength - 6;
+
+            for (uint16_t i = 0, j = 6; i < len; i++, j++){
+                if (((minimr_rr_srv*)rr)->target[i] < rdata[j]) return -1;
+                if (((minimr_rr_srv*)rr)->target[i] > rdata[j]) return 1;
+            }
+
+            if (((minimr_rr_srv*)rr)->target_length + 6 < rdlength) return -1;
+            if (((minimr_rr_srv*)rr)->target_length + 6 > rdlength) return 1;
+
+            return 0;
+        }
+
+        if (rr->type == MINIMR_DNS_TYPE_TXT){
+            uint16_t len = ((minimr_rr_txt*)rr)->txt_length < rdlength ? ((minimr_rr_txt*)rr)->txt_length : rdlength;
+
+            for (uint16_t i = 0; i < len; i++){
+                if (((minimr_rr_txt*)rr)->txt[i] < rdata[i]) return -1;
+                if (((minimr_rr_txt*)rr)->txt[i] > rdata[i]) return 1;
+            }
+
+            if (((minimr_rr_txt*)rr)->txt_length < rdlength) return -1;
+            if (((minimr_rr_txt*)rr)->txt_length > rdlength) return 1;
+
+            return 0;
+        }
+
+
+        if (rr->type == MINIMR_DNS_TYPE_PTR){
+            // we shouldnt need to compare these..
+        }
+
+        return 0;
     }
 
     return MINIMR_OK; // ...
