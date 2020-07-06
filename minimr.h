@@ -29,19 +29,6 @@ extern "C" {
 #endif
 
 
-// big endian
-//#define MINIMR_NTOHS(__u16__) (__u16__)
-//#define MINIMR_NTOHL(__u32__) (__u32__)
-
-// little endian
-#define MINIMR_NTOHS(__u16__) ( (((__u16__) & 0xff00 ) >> 8) | (((__u16__) & 0x00ff ) << 8) )
-#define MINIMR_NTOHL(__u32__) ( (((__u32__) & 0xff000000 ) >> 24) | (((__u32__) & 0x00ff0000 ) >> 8) | (((__u32__) & 0x0000ff00 ) << 8) | (((__u32__) & 0x000000ff ) << 24) )
-
-
-#define MINIMR_HTONS(__u16__) MINIMR_NTOHS(__u16__)
-#define MINIMR_HTONL(__u16__) MINIMR_NTOHL(__u16__)
-
-
 /*************** minimr options **************/
 
 #ifndef MINIMR_RR_CUSTOM_FIELD
