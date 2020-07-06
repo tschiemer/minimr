@@ -52,6 +52,10 @@ extern "C" {
 #define MINIMR_COMPRESSION_MAX_JUMPS 8
 #endif
 
+#ifndef MINIMR_DEFAULT_TTL
+#define MINIMR_DEFAULT_TTL 120
+#endif
+
 /*************** minimr function return values  **************/
 
 #define MINIMR_IGNORE           0xff
@@ -486,27 +490,37 @@ typedef enum  {
     minimr_rr_fun_query_get_rr,
     minimr_rr_fun_query_get_authority_rrs,
     minimr_rr_fun_query_get_extra_rrs,
+    minimr_rr_fun_get_rr,
     minimr_rr_fun_announce_get_rr,
     minimr_rr_fun_announce_get_extra_rrs
 } minimr_rr_fun;
 
-#define MINIMR_RR_FUN_TYPE_IS_VALID( type ) \
-    ((type) == minimr_rr_fun_response_respond_to || \
+#define MINIMR_RR_FUN_IS_VALID( type ) \
+    ((type) == minimr_rr_fun_query_respond_to || \
     (type) == minimr_rr_fun_query_get_rr || \
     (type) == minimr_rr_fun_query_get_authority_rrs || \
-    (type) == minimr_rr_fun_query_get_extra_rrs)
+    (type) == minimr_rr_fun_query_get_extra_rrs || \
+    (type) == minimr_rr_fun_get_rr || \
+    (type) == minimr_rr_fun_announce_get_rr || \
+    (type) == minimr_rr_fun_announce_get_extra_rrs)
+
+// used internally to get the extra compiler argc check
+#define MINIMR_RR_FUN_QUERY_RESPOND_TO( rr, user_data )                                             handler(minimr_rr_fun_query_respond_to, rr, user_data)
+#define MINIMR_RR_FUN_QUERY_GET_RR( rr, qstat, outmsg, outlen, outmsgmaxlen, nrr, user_data )       handler(minimr_rr_fun_query_get_rr, rr, qstat, outmsg, outlen, outmsgmaxlen, nrr, user_data)
+#define MINIMR_RR_FUN_QUERY_GET_AUTHRR( rr, qstat, outmsg, outlen, outmsgmaxlen, nrr, user_data )   handler(minimr_rr_fun_query_get_authority_rrs, rr, qstat, outmsg, outlen, outmsgmaxlen, nrr, user_data)
+#define MINIMR_RR_FUN_QUERY_GET_EXTRARR( rr, qstat, outmsg, outlen, outmsgmaxlen, nrr, user_data )  handler(minimr_rr_fun_query_get_extra_rrs, rr, qstat, outmsg, outlen, outmsgmaxlen, nrr, user_data)
+#define MINIMR_RR_FUN_GET_RR( rr, outmsg, outlen, outmsgmaxlen, nrr, user_data )                    handler(minimr_rr_fun_get_rr, rr, outmsg, outlen, outmsgmaxlen, nrr, user_data)
+#define MINIMR_RR_FUN_ANNOUNCE_GET_RR( rr, outmsg, outlen, outmsgmaxlen, nrr, user_data )           handler(minimr_rr_fun_announce_get_rr, rr, outmsg, outlen, outmsgmaxlen, nrr, user_data)
+#define MINIMR_RR_FUN_ANNOUNCE_GET_EXTRA_RRS( rr, outmsg, outlen, outmsgmaxlen, nrr, user_data )    handler(minimr_rr_fun_announce_get_extra_rrs, rr, outmsg, outlen, outmsgmaxlen, nrr, user_data)
+
 
 /**
- * minimr_rr_fun( minimr_rr_fun_query_respond_to, struct minimr_rr * rr, struct minimr_ struct minimr_rr_stat * rstat, uint8_t * msg , void * user_data);
- * minimr_rr_fun( minimr_rr_fun_query_get_rr, struct minimr_rr * rr, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
- * minimr_rr_fun( minimr_rr_fun_query_get_authority_rrs, .. ) // same as above
- * minimr_rr_fun( minimr_rr_fun_query_get_extra_rrs, .. ) // same as above
- * minimr_rr_fun( minimr_rr_fun_announce_get_rr, .. ) // same as above
- * minimr_rr_fun( minimr_rr_fun_announce_get_extra_rrs, .. ) // same as above
+ * minimr_rr_fun_handler( minimr_rr_fun_query_respond_to, struct minimr_rr * rr, void * user_data);
+ * minimr_rr_fun_handler( minimr_rr_fun_query_get_*, struct minimr_rr * rr, struct minimr_query_stat * qstat, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
+ * minimr_rr_fun_handler( minimr_rr_fun_get_rr, struct minimr_rr * rr,  uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
+ * minimr_rr_fun_handler( minimr_rr_fun_announce_get_*, struct minimr_rr * rr, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
  */
 typedef int (*minimr_rr_fun_handler)(minimr_rr_fun type, struct minimr_rr *rr, ...);
-
-
 
 
 // Start of named RR struct definer
@@ -596,32 +610,6 @@ MINIMR_RR_TYPE_BEGIN_STNAME(,minimr_rr) MINIMR_RR_TYPE_END();
     MINIMR_RR_TYPE_END()
 
 
-// if > 0 will typedef minimr_dns_rr_a with given (max) namelen
-#if MINIMR_RR_TYPE_A_DEFAULT_NAMELEN > 0
-typedef MINIMR_RR_TYPE_A(MINIMR_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_a;
-#endif
-
-// if > 0 will typedef minimr_dns_rr_aaaa with given (max) namelen
-#if MINIMR_DNS_RR_TYPE_AAAA_DEFAULT_NAMELEN > 0
-typedef MINIMR_DNS_RR_TYPE_AAAA(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN) minimr_dns_rr_aaaa;
-#endif
-
-// if > 0 will typedef minimr_dns_rr_ptr with given (max) namelen and domainlen
-#if MINIMR_DNS_RR_TYPE_PTR_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_PTR_DEFAULT_DOMAINLEN > 0
-typedef MINIMR_DNS_RR_TYPE_PTR(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN, MINIMR_DNS_RR_TYPE_PTR_DEFAULT_DOMAINLEN) minimr_dns_rr_ptr;
-#endif
-
-// if > 0 will typedef minimr_dns_rr_srv with given (max) namelen and targetlen
-#if MINIMR_DNS_RR_TYPE_SRV_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_SRV_DEFAULT_TARGETLEN > 0
-typedef MINIMR_DNS_RR_TYPE_SRV(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN, MINIMR_DNS_RR_TYPE_SRV_DEFAULT_TARGETLEN) minimr_dns_rr_;
-#endif
-
-// if > 0 will typedef minimr_dns_rr_srv with given (max) namelen and txtlen
-#if MINIMR_DNS_RR_TYPE_TXT_DEFAULT_NAMELEN > 0 && MINIMR_DNS_RR_TYPE_TXT_DEFAULT_TXTLEN > 0
-typedef MINIMR_DNS_RR_TYPE_TXT(MINIMR_DNS_RR_TYPE_A_DEFAULT_NAMELEN, MINIMR_DNS_RR_TYPE_TXT_DEFAULT_TXTLEN) minimr_dns_rr_aaa;
-#endif
-
-
 
 /*************** NAME and general field utilities **************/
 
@@ -691,7 +679,7 @@ struct minimr_filter {
 };
 
 typedef uint8_t (*minimr_query_handler)(struct minimr_dns_hdr * hdr, struct minimr_query_stat * qstat, uint8_t * msg, uint16_t msglen, void * user_data);
-typedef uint8_t (*minimr_rr_handler)(struct minimr_dns_hdr * hdr, minimr_rr_section, struct minimr_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data);
+typedef uint8_t (*minimr_rr_handler)(struct minimr_dns_hdr * hdr, minimr_rr_section section, struct minimr_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data);
 
 /**
  * Tries to parse given mDNS message calling the (optional) handlers for each encountered query or RR
@@ -812,10 +800,72 @@ int32_t minimr_query_response_msg(
 );
 
 
+/*************** Optional default types and functions **************/
+
+// if > 0 will typedef minimr_dns_rr_a with given (max) namelen
+#if MINIMR_RR_TYPE_A_DEFAULT_NAMELEN > 0
+typedef MINIMR_RR_TYPE_A(MINIMR_RR_TYPE_A_DEFAULT_NAMELEN) minimr_rr_a;
+#define MINIMR_RR_TYPE_A_DEFAULT 1
+#else
+#define MINIMR_RR_TYPE_A_DEFAULT 0
+#endif
+
+// if > 0 will typedef minimr_dns_rr_aaaa with given (max) namelen
+#if MINIMR_RR_TYPE_AAAA_DEFAULT_NAMELEN > 0
+typedef MINIMR_RR_TYPE_AAAA(MINIMR_RR_TYPE_A_DEFAULT_NAMELEN) minimr_rr_aaaa;
+#define MINIMR_RR_TYPE_AAAA_DEFAULT 1
+#else
+#define MINIMR_RR_TYPE_AAAA_DEFAULT 0
+#endif
+
+// if > 0 will typedef minimr_dns_rr_ptr with given (max) namelen and domainlen
+#if MINIMR_RR_TYPE_PTR_DEFAULT_NAMELEN > 0 && MINIMR_RR_TYPE_PTR_DEFAULT_DOMAINLEN > 0
+typedef MINIMR_RR_TYPE_PTR(MINIMR_RR_TYPE_PTR_DEFAULT_NAMELEN, MINIMR_RR_TYPE_PTR_DEFAULT_DOMAINLEN) minimr_rr_ptr;
+#define MINIMR_RR_TYPE_PTR_DEFAULT 1
+#else
+#define MINIMR_RR_TYPE_PTR_DEFAULT 0
+#endif
+
+// if > 0 will typedef minimr_dns_rr_srv with given (max) namelen and targetlen
+#if MINIMR_RR_TYPE_SRV_DEFAULT_NAMELEN > 0 && MINIMR_RR_TYPE_SRV_DEFAULT_TARGETLEN > 0
+typedef MINIMR_RR_TYPE_SRV(MINIMR_RR_TYPE_SRV_DEFAULT_NAMELEN, MINIMR_RR_TYPE_SRV_DEFAULT_TARGETLEN) minimr_rr_srv;
+#define MINIMR_RR_TYPE_SRV_DEFAULT 1
+#else
+#define MINIMR_RR_TYPE_SRV_DEFAULT 0
+#endif
+
+// if > 0 will typedef minimr_dns_rr_srv with given (max) namelen and txtlen
+#if MINIMR_RR_TYPE_TXT_DEFAULT_NAMELEN > 0 && MINIMR_RR_TYPE_TXT_DEFAULT_TXTLEN > 0
+typedef MINIMR_RR_TYPE_TXT(MINIMR_RR_TYPE_TXT_DEFAULT_NAMELEN, MINIMR_RR_TYPE_TXT_DEFAULT_TXTLEN) minimr_rr_txt;
+#define MINIMR_RR_TYPE_TXT_DEFAULT 1
+#else
+#define MINIMR_RR_TYPE_TXT_DEFAULT 0
+#endif
+
+// how many default types are actually defined?
+#define MINIMR_RR_TYPE_DEFAULT_COUNT (MINIMR_RR_TYPE_A_DEFAULT + MINIMR_RR_TYPE_AAAA_DEFAULT + MINIMR_RR_TYPE_PTR_DEFAULT + MINIMR_RR_TYPE_SRV_DEFAULT + MINIMR_RR_TYPE_TXT_DEFAULT)
+
+
+
+//#if MINIMR_RR_COUNT > 0 && MINIMR_SIMPLE_INTERFACE_ENABLED == 0
+//
+//int32_t minimr_query_response_msg_wrap(
+//    uint8_t *msg, uint16_t msglen,
+//    struct minimr_rr **records, uint16_t nrecords,
+//    uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+//    uint8_t *unicast_requested,
+//    void * user_data
+//);
+//
+//#endif //MINIMR_RR_COUNT > 0
+
+
+
+
+
 #ifdef __cplusplus
 }
 #endif
-
 
 
 #endif //MINIMR_MINIMR_H

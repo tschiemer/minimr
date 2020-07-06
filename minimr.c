@@ -659,6 +659,7 @@ int32_t  minimr_make_msg(
 
     MINIMR_DEBUGF("added %d queries rr\n", nqueries);
 
+    uint16_t final_nanswers = 0; // needed because there might be NULL entries
 
     // add all normal answers RRs
     for(uint16_t i = 0; i < nanswers; i++){
@@ -669,17 +670,19 @@ int32_t  minimr_make_msg(
 
         uint16_t nrr = 0;
 
-        uint8_t res = answerrr[i]->handler(minimr_rr_fun_query_get_rr, answerrr[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
+        //minimr_rr_fun_handler( minimr_rr_fun_get_rr, struct minimr_rr * rr,  uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
+        uint8_t res = answerrr[i]->MINIMR_RR_FUN_GET_RR(answerrr[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
 
         if (res != MINIMR_OK){
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
         }
 
-        // don't use nrr
+        final_nanswers += nrr;
     }
 
     MINIMR_DEBUGF("added %d known answer rr\n", nanswers);
 
+    uint16_t final_nauthrr = 0;
 
     // add all normal answers RRs
     for(uint16_t i = 0; i < nauthrr; i++){
@@ -690,17 +693,18 @@ int32_t  minimr_make_msg(
 
         uint16_t nrr = 0;
 
-        uint8_t res = authrr[i]->handler(minimr_rr_fun_query_get_rr, authrr[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
+        uint8_t res = authrr[i]->MINIMR_RR_FUN_GET_RR(authrr[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
 
         if (res != MINIMR_OK){
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
         }
 
-        // don't use nrr
+        final_nauthrr += nrr;
     }
 
     MINIMR_DEBUGF("added %d extra rr\n", nauthrr);
 
+    uint16_t final_nextrarr = 0;
 
     // add all normal answers RRs
     for(uint16_t i = 0; i < nextrarr; i++){
@@ -711,13 +715,13 @@ int32_t  minimr_make_msg(
 
         uint16_t nrr = 0;
 
-        uint8_t res = extrarr[i]->handler(minimr_rr_fun_query_get_extra_rrs, extrarr[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
+        uint8_t res = extrarr[i]->MINIMR_RR_FUN_GET_RR(extrarr[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
 
         if (res != MINIMR_OK){
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
         }
 
-        // don't use nrr
+        final_nextrarr += nrr;
     }
 
     MINIMR_DEBUGF("added %d extra rr\n", nextrarr);
@@ -737,9 +741,9 @@ int32_t  minimr_make_msg(
     outhdr.flags[1] = flag2;
 
     outhdr.nqueries = nqueries;
-    outhdr.nanswers = nanswers;
-    outhdr.nauthrr = nauthrr;
-    outhdr.nextrarr = nextrarr;
+    outhdr.nanswers = final_nanswers;
+    outhdr.nauthrr = final_nauthrr;
+    outhdr.nextrarr = final_nextrarr;
 
     // add header
     minimr_dns_hdr_write(outmsg, &outhdr);
@@ -851,7 +855,8 @@ int32_t minimr_announce_msg(
 
         uint16_t nrr = 0;
 
-        uint8_t res = records[i]->handler(minimr_rr_fun_announce_get_rr, records[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
+        //minimr_rr_fun_handler( minimr_rr_fun_announce_get_*, struct minimr_rr * rr, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
+        uint8_t res = records[i]->MINIMR_RR_FUN_ANNOUNCE_GET_RR( records[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
 
         if (res != MINIMR_OK){
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
@@ -873,7 +878,8 @@ int32_t minimr_announce_msg(
 
         uint16_t nrr = 0;
 
-        uint8_t res = records[i]->handler(minimr_rr_fun_announce_get_extra_rrs, records[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
+        //minimr_rr_fun_handler( minimr_rr_fun_announce_get_*, struct minimr_rr * rr, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
+        uint8_t res = records[i]->MINIMR_RR_FUN_ANNOUNCE_GET_EXTRA_RRS( records[i], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
 
         if (res != MINIMR_OK){
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
@@ -1089,7 +1095,8 @@ int32_t minimr_query_response_msg(
                 // so it's a match and we have to check wether it's up to date
                 struct minimr_rr * rr = records[qstats[iq].match_i];
 
-                if (rr->handler(minimr_rr_fun_query_respond_to, rr, &rstat, msg, user_data) == MINIMR_DO_NOT_RESPOND){
+                //minimr_rr_fun_handler(minimr_rr_fun_query_respond_to, struct minimr_rr * rr, void * user_data)
+                if (rr->MINIMR_RR_FUN_QUERY_RESPOND_TO(rr, user_data) == MINIMR_DO_NOT_RESPOND){
                     qstats[iq].relevant = 0;
                     remaining_nq--;
                 } else if ((qstats[iq].unicast_class & MINIMR_DNS_QUNICAST) == MINIMR_DNS_QUNICAST) {
@@ -1144,7 +1151,8 @@ int32_t minimr_query_response_msg(
 
         uint16_t nrr = 0;
 
-        uint8_t res = rr->handler(minimr_rr_fun_query_get_rr, rr, outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
+        //minimr_rr_fun_handler( minimquery_get_*, struct minimr_rr * rr, struct minimr_query_stat * qstat, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
+        uint8_t res = rr->MINIMR_RR_FUN_QUERY_GET_RR(rr, &qstats[iq], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
 
         if (res != MINIMR_OK){
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
@@ -1168,7 +1176,8 @@ int32_t minimr_query_response_msg(
 
         uint16_t nrr = 0;
 
-        uint8_t res = rr->handler(minimr_rr_fun_query_get_authority_rrs, rr, outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
+        //minimr_rr_fun_handler( minimquery_get_*, struct minimr_rr * rr, struct minimr_query_stat * qstat, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
+        uint8_t res = rr->MINIMR_RR_FUN_QUERY_GET_AUTHRR(rr, &qstats[iq], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
 
         if (res != MINIMR_OK){
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
@@ -1192,7 +1201,8 @@ int32_t minimr_query_response_msg(
 
         uint16_t nrr = 0;
 
-        uint8_t res = rr->handler(minimr_rr_fun_query_get_extra_rrs, rr, outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
+        //minimr_rr_fun_handler( minimquery_get_*, struct minimr_rr * rr, struct minimr_query_stat * qstat, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
+        uint8_t res = rr->MINIMR_RR_FUN_QUERY_GET_EXTRARR(rr, &qstats[iq], outmsg, &outlen, outmsgmaxlen, &nrr, user_data);
 
         if (res != MINIMR_OK){
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
@@ -1223,5 +1233,30 @@ int32_t minimr_query_response_msg(
 
     *outmsglen = outlen;
 
-    return MINIMR_DNS_HDR2_RCODE_NOERROR;
+    return MINIMR_OK;
 }
+
+
+#if MINIMR_RR_COUNT > 0  && MINIMR_SIMPLE_INTERFACE_ENABLED == 0
+
+int32_t minimr_default_query_response_msg(
+    uint8_t *msg, uint16_t msglen,
+    struct minimr_rr **records, uint16_t nrecords,
+    uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+    uint8_t *unicast_requested,
+    void * user_data
+)
+{
+    struct minimr_query_stat qstats[MINIMR_RR_COUNT];
+
+    return minimr_query_response_msg(
+        msg, msglen,
+        qstats, MINIMR_RR_COUNT,
+        records, nrecords,
+        outmsg, outmsglen, outmsgmaxlen,
+        unicast_requested,
+        user_data
+    );
+}
+
+#endif
