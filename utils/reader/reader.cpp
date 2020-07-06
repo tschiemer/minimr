@@ -113,7 +113,7 @@ void print_hdr(struct minimr_dns_hdr * hdr){
     printf("hdr\n tid %04x flag %02x%02x nq %04x nrr %04x narr %04x nexrr %04x\n", hdr->transaction_id, hdr->flags[0], hdr->flags[1], hdr->nqueries, hdr->nanswers, hdr->nauthrr, hdr->nextrarr);
 }
 
-uint8_t print_query(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * qstat, uint8_t * msg, uint16_t msglen, void * user_data)
+uint8_t print_query(struct minimr_dns_hdr * hdr, struct minimr_query_stat * qstat, uint8_t * msg, uint16_t msglen, void * user_data)
 {
     uint8_t unicast = (qstat->unicast_class & MINIMR_DNS_QUNICAST);
     uint8_t glass = (qstat->unicast_class & ~MINIMR_DNS_QCLASS);
@@ -130,7 +130,7 @@ uint8_t print_query(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * 
     return MINIMR_CONTINUE;
 }
 
-uint8_t print_rr(struct minimr_dns_hdr * hdr, minimr_rr_section section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data)
+uint8_t print_rr(struct minimr_dns_hdr * hdr, minimr_rr_section section, struct minimr_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data)
 {
 
     uint8_t * sectionstr;

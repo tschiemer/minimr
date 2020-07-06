@@ -296,7 +296,7 @@ void minimr_dns_hdr_write(uint8_t *dst, struct minimr_dns_hdr *hdr);
  * basic query info as computed
  * @see minimr_dns_extract_query_stat()
  **/
-struct minimr_dns_query_stat {
+struct minimr_query_stat {
     uint16_t type;          // QTYPE
     uint16_t unicast_class; // QUNICAST bit and QCLASS
 
@@ -310,21 +310,26 @@ struct minimr_dns_query_stat {
 
 /**
  * extracts query info on success and sets current <pos> after current query
- * @see struct minimr_dns_query_stat
+ * @see struct minimr_query_stat
  * @return MINIMR_OK                        if all ok
  * @return MINIMR_NOT_OK                    if query fault occurred
  * @return MINIMR_DNS_HDR2_RCODE_SERVAIL    if server failed (failed to analyze compressed name)
  */
-uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
+uint8_t minimr_extract_query_stat(struct minimr_query_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
 
+#define MINIMR_DNS_Q_WRITE_TYPE( __dst__, __len__, __type__) \
+    (__dst__)[(__len__)++] = ((__type__) >> 8) & 0xff; \
+    (__dst__)[(__len__)++] = (__type__) & 0xff;
 
-#define MINIMR_DNS_Q_WRITE( __dst__, __len__, __name__, __namelen__, __type__, __class__, __unicast_requested__) \
+#define MINIMR_DNS_Q_WRITE_CLASS( __dst__, __len__, __class__  ) \
+    (__dst__)[(__len__)++] = ((__class__) >> 8) & 0xff; \
+    (__dst__)[(__len__)++] = (__class__) & 0xff;
+
+#define MINIMR_DNS_Q_WRITE( __dst__, __len__, __name__, __namelen__, __type__, __class__) \
     for(uint16_t i = 0; i < (__namelen__); i++){ (__dst__)[(__len__)+i] = (__name__)[i]; } \
     (__len__) += (__namelen__); \
-    (__dst__)[(__len__)++] = ((__type__) >> 8) & 0xff; \
-    (__dst__)[(__len__)++] = (__type__) & 0xff; \
-    (__dst__)[(__len__)++] = ((__class__) | ((__unicast_requested__) & MINIMR_DNS_QUNICAST) >> 8) & 0xff; \
-    (__dst__)[(__len__)++] = (__class__) & 0xff;
+    MINIMR_DNS_Q_WRITE_TYPE( __dst__, __len__, __type__) \
+    MINIMR_DNS_Q_WRITE_CLASS( __dst__, __len__, __class__ )
 
 /*************** mDNS RR **************/
 
@@ -346,7 +351,7 @@ uint8_t minimr_dns_extract_query_stat(struct minimr_dns_query_stat *stat, uint8_
  * basic RR info as computed
  * @see minimr_dns_extract_rr_stat()
  */
-struct minimr_dns_rr_stat {
+struct minimr_rr_stat {
     uint16_t type;
     uint16_t cache_class;
     uint32_t ttl;
@@ -362,12 +367,12 @@ struct minimr_dns_rr_stat {
 
 /**
  * extracts RR info on success and sets current <pos> after current RR
- * @see struct minimr_dns_rr_stat
+ * @see struct minimr_rr_stat
  * @return MINIMR_OK                        if all ok
  * @return MINIMR_NOT_OK                    if query fault occurred
  * @return MINIMR_DNS_HDR2_RCODE_SERVAIL    if server failed (failed to analyze compressed name)
  */
-uint8_t minimr_dns_extract_rr_stat(struct minimr_dns_rr_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
+uint8_t minimr_extract_rr_stat(struct minimr_rr_stat *stat, uint8_t *msg, uint16_t *pos, uint16_t msglen);
 
 
 /**
@@ -482,35 +487,37 @@ int8_t minimr_dns_rr_lexcmp(uint16_t lhsclass, uint16_t lhstype, uint8_t * lhsrd
     MINIMR_DNS_RR_WRITE_TXT_BODY(__dst__, __len__, __txt__, __txtlen__)
 
 
-// forward declaration for minimr_dns_rr_fun
-struct minimr_dns_rr;
+// forward declaration for minimr_rr_fun
+struct minimr_rr;
 
 /**
  * desired function type
- * @see minimr_dns_rr_fun
+ * @see minimr_rr_fun
  */
-enum minimr_dns_rr_fun_type {
-    minimr_dns_rr_fun_type_respond_to,
-    minimr_dns_rr_fun_type_get_rr,
-    minimr_dns_rr_fun_type_get_authority_rrs,
-    minimr_dns_rr_fun_type_get_extra_rrs,
-    minimr_dns_rr_fun_type_get_query
-};
+typedef enum  {
+    minimr_rr_fun_query_respond_to,
+    minimr_rr_fun_query_get_rr,
+    minimr_rr_fun_query_get_authority_rrs,
+    minimr_rr_fun_query_get_extra_rrs,
+    minimr_rr_fun_announce_get_rr,
+    minimr_rr_fun_announce_get_extra_rrs
+} minimr_rr_fun;
 
 #define MINIMR_RR_FUN_TYPE_IS_VALID( type ) \
-    ((type) == minimr_dns_rr_fun_type_respond_to || \
-    (type) == minimr_dns_rr_fun_type_get_rr || \
-    (type) == minimr_dns_rr_fun_type_get_authority_rrs || \
-    (type) == minimr_dns_rr_fun_type_get_extra_rrs || \
-    (type) == minimr_dns_rr_fun_type_get_query)
+    ((type) == minimr_rr_fun_response_respond_to || \
+    (type) == minimr_rr_fun_query_get_rr || \
+    (type) == minimr_rr_fun_query_get_authority_rrs || \
+    (type) == minimr_rr_fun_query_get_extra_rrs)
 
 /**
- * minimr_dns_rr_fun( minimr_dns_rr_fun_type_is_uptodate, struct minimr_dns_rr * rr, struct minimr_dns_rr_stat * rstat, uint8_t * msg , void * user_data);
- * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_answer_rrs, struct minimr_dns_rr * rr, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
- * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_authority_rrs, .. ) // same as above
- * minimr_dns_rr_fun( minimr_dns_rr_fun_type_get_additional_rrs, .. ) // same as above
+ * minimr_rr_fun( minimr_rr_fun_query_respond_to, struct minimr_rr * rr, struct minimr_ struct minimr_rr_stat * rstat, uint8_t * msg , void * user_data);
+ * minimr_rr_fun( minimr_rr_fun_query_get_rr, struct minimr_rr * rr, uint8_t * outmsg, uint16_t * outlen, uint16_t outmsgmaxlen, uint16_t * nrr, void * user_data)
+ * minimr_rr_fun( minimr_rr_fun_query_get_authority_rrs, .. ) // same as above
+ * minimr_rr_fun( minimr_rr_fun_query_get_extra_rrs, .. ) // same as above
+ * minimr_rr_fun( minimr_rr_fun_announce_get_rr, .. ) // same as above
+ * minimr_rr_fun( minimr_rr_fun_announce_get_extra_rrs, .. ) // same as above
  */
-typedef int (*minimr_dns_rr_fun)(enum minimr_dns_rr_fun_type type, struct minimr_dns_rr *rr, ...);
+typedef int (*minimr_rr_fun_handler)(minimr_rr_fun type, struct minimr_rr *rr, ...);
 
 
 
@@ -525,7 +532,7 @@ typedef int (*minimr_dns_rr_fun)(enum minimr_dns_rr_fun_type type, struct minimr
         MINIMR_TIMESTAMP_FIELD \
         MINIMR_RR_CUSTOM_FIELD \
         \
-        minimr_dns_rr_fun fun; \
+        minimr_rr_fun_handler handler; \
         \
         uint16_t name_length; \
         \
@@ -540,9 +547,9 @@ typedef int (*minimr_dns_rr_fun)(enum minimr_dns_rr_fun_type type, struct minimr
 
 /**
  * actual base type definition
- * defines struct minimr_dns_rr
+ * defines struct minimr_rr
  */
-MINIMR_RR_TYPE_BEGIN_STNAME(,minimr_dns_rr) MINIMR_RR_TYPE_END();
+MINIMR_RR_TYPE_BEGIN_STNAME(,minimr_rr) MINIMR_RR_TYPE_END();
 
 
 // A struct fields
@@ -696,8 +703,8 @@ struct minimr_filter {
 
 };
 
-typedef uint8_t (*minimr_query_handler)(struct minimr_dns_hdr * hdr, struct minimr_dns_query_stat * qstat, uint8_t * msg, uint16_t msglen, void * user_data);
-typedef uint8_t (*minimr_rr_handler)(struct minimr_dns_hdr * hdr, minimr_rr_section, struct minimr_dns_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data);
+typedef uint8_t (*minimr_query_handler)(struct minimr_dns_hdr * hdr, struct minimr_query_stat * qstat, uint8_t * msg, uint16_t msglen, void * user_data);
+typedef uint8_t (*minimr_rr_handler)(struct minimr_dns_hdr * hdr, minimr_rr_section, struct minimr_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data);
 
 /**
  * Tries to parse given mDNS message calling the (optional) handlers for each encountered query or RR
@@ -714,36 +721,91 @@ int32_t minimr_parse_msg(
         void * user_data
 );
 
+
+/**
+ * Generic query structure used for minimr_make_msg(..)
+ * @see minimr_make_msg
+ */
+struct minimr_query {
+    uint16_t type;
+    uint16_t unicast_class;
+    uint8_t * name;
+};
+
+/**
+ * Generates an arbitrary mDNS message according to arguments.
+ *
+ * IMPORTANT NOTE: names are expected to be normalized
+ *
+ * @param queries       can be NULL iff nqueries == 0
+ * @param answer_rrs    can be NULL iff nanswer_rrs == 0
+ * @param auth_rrs      can be NULL iff nauth_rrs == 0
+ * @param extra_rrs     can be NULL iff nextra_rrs == 0
+ * @see struct minimr_query
+ * @see struct minimr_rr
+ * @see
+ */
 int32_t  minimr_make_msg(
         uint16_t tid, uint8_t flag1, uint8_t flag2,
-        struct minimr_dns_rr **records, uint16_t nrecords,
+        struct minimr_query * queries, uint16_t nqueries,
+        struct minimr_rr ** answer_rrs, uint16_t nanswer_rrs,
+        struct minimr_rr ** auth_rrs, uint16_t nauth_rrs,
+        struct minimr_rr ** extra_rrs, uint16_t nextra_rrs,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+        void * user_data
+);
+
+
+/**
+ * Comfort function to generate a probe-query for 1-2 specific (normalized) qnames ANY type and IN class
+ *
+ * @param name1     required NORMALIZED name to query
+ * @param name2     optional NORMALIZED name to query; NULL if not used
+ */
+int32_t minimr_probequery_msg(
+        uint8_t * name1,
+        uint8_t * name2,
+        struct minimr_rr ** proposed_rrs, uint16_t nproposed_rrs,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+        uint8_t request_unicast,
+        void * user_data
+);
+
+
+/**
+ * Generates announcement message (unsolicited response) for given records
+ * Record callback called with minimr_rr_fun_announce_get_rr and minimr_rr_fun_announce_get_extra_rrs options
+ */
+int32_t minimr_announce_msg(
+        struct minimr_rr **records, uint16_t nrecords,
         uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
         void * user_data
 );
 
 /**
- *
+ * Comfort function to generate a termination announcement setting all record's TTLs to zero (0)
+ * DANGER: writes original record's TTL value
+ * @see minimr_announce()
  */
-uint8_t minimr_announce(
-        struct minimr_dns_rr **records, uint16_t nrecords,
-        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
-        void * user_data
-);
-
-uint8_t minimr_terminate(
-        struct minimr_dns_rr **records, uint16_t nrecords,
+int32_t minimr_terminate_msg(
+        struct minimr_rr **records, uint16_t nrecords,
         uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
         void * user_data
 );
 
 
 
-uint8_t minimr_handle_queries(
+/**
+ * Generates response messages to given message (if is a query) based on given record set
+ * @param qstats    array of internally used query stat; typically nqstats >= nrecords
+ */
+int32_t minimr_query_response_msg(
     uint8_t *msg, uint16_t msglen,
-    struct minimr_dns_query_stat qstats[], uint16_t nqstats,
-    struct minimr_dns_rr **records, uint16_t nrecords,
+    struct minimr_query_stat qstats[], uint16_t nqstats,
+    struct minimr_rr **records, uint16_t nrecords,
     uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
-    uint8_t *unicast_requested
+    uint8_t *unicast_requested,
+    void * user_data
 );
 
 
