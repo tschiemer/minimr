@@ -787,6 +787,44 @@ int32_t minimr_probequery_msg(
     );
 }
 
+
+int32_t minimr_query_msg(
+        uint8_t * name1,
+        uint8_t * name2,
+        struct minimr_rr ** knownanswer_rrs, uint16_t nknownanswer_rrs,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+        uint8_t request_unicast,
+        void * user_data
+)
+{
+    MINIMR_ASSERT(name1 != NULL);
+    MINIMR_ASSERT(nknownanswer_rrs == 0 | knownanswer_rrs != NULL);
+
+    struct minimr_query queries[2];
+
+    queries[0].type = MINIMR_DNS_TYPE_ANY;
+    queries[0].unicast_class = MINIMR_DNS_CLASS_IN | (request_unicast ? MINIMR_DNS_QUNICAST : 0);
+    queries[0].name = name1;
+
+    uint16_t nqueries = 1;
+
+    if (name2 != NULL){
+        queries[1].type = MINIMR_DNS_TYPE_ANY;
+        queries[1].unicast_class = MINIMR_DNS_CLASS_IN | (request_unicast ? MINIMR_DNS_QUNICAST : 0);
+        queries[1].name = name2;
+    }
+
+    return minimr_make_msg(
+            0, 0, 0, // no special header
+            queries, nqueries,
+            knownanswer_rrs, nknownanswer_rrs,
+            NULL, 0, // no auth rrs
+            NULL, 0, // no extra rrs
+            outmsg, outmsglen, outmsgmaxlen,
+            user_data
+    );
+}
+
 int32_t minimr_announce_msg(
     struct minimr_rr **records, uint16_t nrecords,
     uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,

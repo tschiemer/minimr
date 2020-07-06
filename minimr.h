@@ -773,6 +773,22 @@ int32_t minimr_probequery_msg(
 
 
 /**
+ * Comfort function to generate a query with known-answers for 1-2 specific (normalized) qnames ANY type and IN class
+ *
+ * @param name1     required NORMALIZED name to query
+ * @param name2     optional NORMALIZED name to query; NULL if not used
+ */
+int32_t minimr_query_msg(
+        uint8_t * name1,
+        uint8_t * name2,
+        struct minimr_rr ** knownanswer_rrs, uint16_t nknownanswer_rrs,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+        uint8_t request_unicast,
+        void * user_data
+);
+
+
+/**
  * Generates announcement message (unsolicited response) for given records
  * Record callback called with minimr_rr_fun_announce_get_rr and minimr_rr_fun_announce_get_extra_rrs options
  */
