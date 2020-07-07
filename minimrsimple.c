@@ -265,7 +265,7 @@ int32_t minimr_simple_stop(uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsg
     return minimr_simple_terminate_msg(outmsg, outmsglen, outmsgmaxlen);
 }
 
-void minimr_simple_reprobe_callback(uint8_t * outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen)
+void minimr_simple_probing_end_timer_callback(uint8_t * outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen)
 {
     // if not in the right state, do nothing
     if (simple_state != simple_state_await_probe_response){
