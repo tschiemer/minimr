@@ -76,8 +76,21 @@ extern "C" {
 
 /*************** Specified mDNS Values **************/
 
-#define MINIMR_DNS_PROBE_BOOTUP_DELAY_MSEC  250
+#define MINIMR_DNS_PORT 5353
+
+#define MINIMR_DNS_IPV4_MCAST_U8    {224, 0, 0, 251}
+#define MINIMR_DNS_IPV4_MCAST_STR   "224.0.0.251"
+
+#define MINIMR_DNS_IPV6_MCAST_U16   {0xff02,0,0,0,0,0,0,0xfb};
+#define MINIMR_DNS_IPV6_MCAST_STR   "ff02::fb"
+
+// at startup wait random time in 0 - 250 msec before sending mDNS messages
+#define MINIMR_DNS_STARTUP_MAXDELAY_MSEC    250
+
+// delay between successive probe queries
 #define MINIMR_DNS_PROBE_WAIT_MSEC          250
+
+
 
 
 /*************** DNS Definitions **************/
