@@ -25,8 +25,8 @@ SocketAddress ipv6ll;
 UDPSocket echo_sock;
 
 UDPSocket mdns_sock;
-SocketAddress mdns_ipv4("224.0.0.251",5353);
-SocketAddress mdns_ipv6("ff02::fb",5353);
+SocketAddress mdns_ipv4(MINIMR_DNS_IPV4_MCAST_STR, MINIMR_DNS_PORT);
+SocketAddress mdns_ipv6(MINIMR_DNS_IPV6_MCAST_STR, MINIMR_DNS_PORT);
 
 
 typedef enum {
@@ -190,7 +190,7 @@ int main()
     // random startup delay
     mdns_timeout.attach([](){
         mdns_state = mdns_state_start;
-    }, std::chrono::milliseconds(rand() % 250));
+    }, std::chrono::milliseconds(rand() % MINIMR_DNS_STARTUP_MAXDELAY_MSEC));
 
     while (true) {
 
@@ -238,7 +238,7 @@ int main()
             
             mdns_sock.open(&eth);
 
-            mdns_sock.bind(5353);
+            mdns_sock.bind(MINIMR_DNS_PORT);
             mdns_sock.set_blocking(false);
 
             mdns_sock.join_multicast_group(mdns_ipv4);
