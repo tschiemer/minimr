@@ -49,6 +49,17 @@ void minimr_simple_set_ips(uint8_t * ipv4, uint16_t * ipv6);
 
 /************* Simple State Machine ******************/
 
+typedef enum {
+    simple_state_init,
+    simple_state_probe,
+    simple_state_await_probe_response,
+    simple_state_announce,
+    simple_state_responding,
+    simple_state_stopped
+} simple_state_t;
+
+simple_state_t minimr_simple_get_state();
+
 struct minimr_simple_init_st {
 
     /**
