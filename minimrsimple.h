@@ -75,14 +75,9 @@ struct minimr_simple_init_st {
     uint8_t probe_or_not;
 
     /**
-     * called when minimr_simple_probing_end_timer_callback() is to be called
+     * called when minimr_simple_reprobe_callback() is to be called
      */
-    void (*probing_end_timer)(uint16_t msec); //
-
-    /**
-     * Called by probe tiebreaker: when called host is requested to execute minimr_simple_start() again after 1 second
-     */
-    void (*restart_in_1sec)();
+    void (*probing_end_timer)(uint16_t msec);
 
     /**
      * Notification to host that there is a name conflict and reconfiguration is needed.
@@ -130,7 +125,7 @@ void minimr_simple_start();
 /**
  * To be called by host when the probing end timer has been triggered.
  */
-void minimr_simple_probing_end_timer_callback();
+void minimr_simple_probing_end_timer_callback(uint8_t * outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen);
 
 /**
  * To be called by host when the announcement timer has been triggered.

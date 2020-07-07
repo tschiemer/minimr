@@ -144,7 +144,9 @@ typedef struct {
 } simple_tie_breaker_t;
 
 static volatile simple_state_t simple_state;
+
 static uint8_t simple_announcement_count;
+static uint8_t simple_probe_count;
 
 static struct minimr_simple_init_st simple_cfg;
 
@@ -189,7 +191,6 @@ void minimr_simple_init(struct minimr_simple_init_st * init_st)
 {
     MINIMR_ASSERT(init_st != NULL);
     MINIMR_ASSERT(init_st->probe_or_not == 0 || init_st->probing_end_timer != NULL);
-    MINIMR_ASSERT(init_st->probe_or_not == 0 || init_st->restart_in_1sec != NULL);
     MINIMR_ASSERT(init_st->probe_or_not == 0 || init_st->reconfiguration_needed != NULL);
     MINIMR_ASSERT(init_st->announcement_count <= 8);
     MINIMR_ASSERT(init_st->announcement_count < 2 || init_st->announcement_timer != NULL);
@@ -198,7 +199,6 @@ void minimr_simple_init(struct minimr_simple_init_st * init_st)
 
     simple_cfg.probe_or_not = init_st->probe_or_not;
     simple_cfg.probing_end_timer = init_st->probing_end_timer;
-    simple_cfg.restart_in_1sec = init_st->restart_in_1sec;
     simple_cfg.reconfiguration_needed = init_st->reconfiguration_needed;
 
     simple_cfg.announcement_count = init_st->announcement_count;
@@ -254,15 +254,6 @@ void minimr_simple_start()
     }
 }
 
-void minimr_simple_probing_end_timer_callback()
-{
-    // if still awaiting a probing response, assume we're alright
-    if (simple_state == simple_state_await_probe_response){
-        simple_state = simple_state_responding;
-        return;
-    }
-}
-
 int32_t minimr_simple_stop(uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen)
 {
     simple_state = simple_state_stopped;
@@ -272,6 +263,24 @@ int32_t minimr_simple_stop(uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsg
     }
 
     return minimr_simple_terminate_msg(outmsg, outmsglen, outmsgmaxlen);
+}
+
+void minimr_simple_reprobe_callback(uint8_t * outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen)
+{
+    // if not in the right state, do nothing
+    if (simple_state != simple_state_await_probe_response){
+        return;
+    }
+
+    // after the third probe we're ok!
+    if (simple_probe_count >= 3){
+        simple_state = simple_state_responding;
+        return;
+    }
+
+    simple_probe_count++;
+
+    minimr_simple_probequery_msg(outmsg, outmsglen, outmsgmaxlen, 0);
 }
 
 int32_t minimr_simple_announce(uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen)
@@ -318,6 +327,9 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
             simple_state = simple_state_stopped;
         } else {
             simple_state = simple_state_await_probe_response;
+
+            simple_probe_count = 1;
+            simple_cfg.probing_end_timer(250);
         }
 
         return res;
