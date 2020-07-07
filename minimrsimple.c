@@ -33,7 +33,7 @@ minimr_rr_a minimr_simple_rr_a = {
 #if MINIMR_RR_TYPE_AAAA_DEFAULT
 minimr_rr_aaaa minimr_simple_rr_aaaa = {
     .cache_class = MINIMR_DNS_CLASS_IN,
-    .type = MINIMR_DNS_TYPE_A,
+    .type = MINIMR_DNS_TYPE_AAAA,
     .ttl = MINIMR_DEFAULT_TTL,
     .handler = simple_rr_handler,
 
@@ -171,6 +171,7 @@ void minimr_simple_set_ips(uint8_t * ipv4, uint16_t * ipv6)
     if (ipv4 == NULL){
         minimr_simple_rr_set[MINIMR_SIMPLE_A_INDEX] = NULL;
     } else {
+        // MINIMR_DEBUGF("setting A ipv4\n");
         minimr_simple_rr_a.ipv4[0] = ipv4[0];
         minimr_simple_rr_a.ipv4[1] = ipv4[1];
         minimr_simple_rr_a.ipv4[2] = ipv4[2];
@@ -183,6 +184,7 @@ void minimr_simple_set_ips(uint8_t * ipv4, uint16_t * ipv6)
     if (ipv6 == NULL){
         minimr_simple_rr_set[MINIMR_SIMPLE_AAAA_INDEX] = NULL;
     } else {
+        // MINIMR_DEBUGF("setting AAAA ipv6\n");
         minimr_simple_rr_aaaa.ipv6[0] = ipv6[0];
         minimr_simple_rr_aaaa.ipv6[1] = ipv6[1];
         minimr_simple_rr_aaaa.ipv6[2] = ipv6[2];
@@ -205,6 +207,7 @@ void minimr_simple_init(struct minimr_simple_init_st * init_st)
     MINIMR_ASSERT(init_st->announcement_count <= 8);
     MINIMR_ASSERT(init_st->announcement_count < 2 || init_st->announcement_timer != NULL);
 
+    simple_cfg.state_changed = init_st->state_changed;
     simple_cfg.processing_required = init_st->processing_required;
 
     simple_cfg.probe_or_not = init_st->probe_or_not;
@@ -246,17 +249,39 @@ void minimr_simple_init(struct minimr_simple_init_st * init_st)
 #endif
 }
 
-void minimr_simple_start()
+void minimr_simple_start(uint16_t ttl)
 {
     // only act when in init or stopped state
     if (simple_state != simple_state_init && simple_state != simple_state_stopped){
         return;
     }
 
+    MINIMR_DEBUGF("minimrsimple: starting\n");
+
+#if MINIMR_RR_TYPE_A_DEFAULT
+    minimr_simple_rr_a.ttl = ttl;
+#endif
+#if MINIMR_RR_TYPE_AAAA_DEFAULT
+    minimr_simple_rr_aaaa.ttl = ttl;
+#endif
+#if MINIMR_RR_TYPE_SRV_DEFAULT
+    minimr_simple_rr_srv.ttl = ttl;
+#endif
+#if MINIMR_RR_TYPE_TXT_DEFAULT
+    minimr_simple_rr_txt.ttl = ttl;
+#endif
+#if MINIMR_RR_TYPE_PTR_DEFAULT
+    minimr_simple_rr_ptr.ttl = ttl;
+#endif
+
     if (simple_cfg.probe_or_not){
         simple_state = simple_state_probe;
     } else {
         simple_state = simple_state_announce;
+    }
+
+    if (simple_cfg.state_changed != NULL){
+        simple_cfg.state_changed(simple_state);
     }
 
     if (simple_cfg.processing_required != NULL){
@@ -266,31 +291,56 @@ void minimr_simple_start()
 
 int32_t minimr_simple_stop(uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen)
 {
+    simple_state_t before = simple_state;
+
     simple_state = simple_state_stopped;
+
+    if (simple_cfg.state_changed != NULL && before != simple_state_stopped){
+        simple_cfg.state_changed(simple_state_stopped);
+    }
 
     if (outmsg == NULL || outmsgmaxlen == 0){
         return MINIMR_OK;
     }
 
+    MINIMR_DEBUGF("minimrsimple: stopping\n");
+
     return minimr_simple_terminate_msg(outmsg, outmsglen, outmsgmaxlen);
 }
 
-void minimr_simple_probing_end_timer_callback(uint8_t * outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen)
+void minimr_simple_probe(uint8_t * outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen)
 {
     // if not in the right state, do nothing
     if (simple_state != simple_state_await_probe_response){
         return;
     }
 
+    // MINIMR_DEBUGF("probe count = %d\n", simple_probe_count);
+
     // after the third probe we're ok!
     if (simple_probe_count >= 3){
-        simple_state = simple_state_responding;
+
+        MINIMR_DEBUGF("minimrsimple: starting responding\n");
+
+        simple_state = simple_state_announce;
+
+        if (simple_cfg.state_changed != NULL){
+            simple_cfg.state_changed(simple_state);
+        }
+
+        if (simple_cfg.processing_required != NULL){
+            simple_cfg.processing_required();
+        }
         return;
     }
 
-    simple_probe_count++;
+    MINIMR_DEBUGF("minimrsimple: probing\n");
 
-    minimr_simple_probequery_msg(outmsg, outmsglen, outmsgmaxlen, 0);
+    simple_probe_count++;
+    simple_cfg.probing_end_timer(250);
+
+    // MINIMR_DEBUGF("reprobe!\n");
+    minimr_simple_probequery_msg(outmsg, outmsglen, outmsgmaxlen, 1);
 }
 
 int32_t minimr_simple_announce(uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen)
@@ -312,6 +362,8 @@ int32_t minimr_simple_announce(uint8_t *outmsg, uint16_t *outmsglen, uint16_t ou
         }
 
     }
+
+    MINIMR_DEBUGF("minimrsimple: announcing\n");
 
     return minimr_simple_announce_msg(outmsg, outmsglen, outmsgmaxlen);
 }
@@ -342,6 +394,10 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
             simple_cfg.probing_end_timer(250);
         }
 
+        if (simple_cfg.state_changed != NULL){
+            simple_cfg.state_changed(simple_state);
+        }
+
         return res;
     }
 
@@ -361,17 +417,21 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
                 filters[0].name = minimr_simple_rr_a.name;
                 filters[0].name_length = minimr_simple_rr_a.name_length;
             }
-#elif MINIMR_RR_TYPE_AAAA_DEFAULT
+#endif
+#if MINIMR_RR_TYPE_AAAA_DEFAULT
             else if (minimr_simple_rr_set[MINIMR_SIMPLE_AAAA_INDEX] != NULL){
                 filters[0].name = minimr_simple_rr_aaaa.name;
                 filters[0].name_length = minimr_simple_rr_aaaa.name_length;
             }
-#else
-#error No A/AAAA record defined!
 #endif
             else {
                 MINIMR_DEBUGF("No valid A/AAAA set through set_ips(..) - stopping!\n");
                 simple_state = simple_state_stopped;
+
+                if (simple_cfg.state_changed != NULL){
+                    simple_cfg.state_changed(simple_state);
+                }
+
                 return MINIMR_NOT_OK;
             }
 
@@ -393,7 +453,7 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
             int32_t res = minimr_parse_msg(msg, msglen, minimr_msgtype_any, NULL, NULL, 0, simple_probe_rrhandler, filters, nfilters, NULL);
 
             if (res != MINIMR_OK){
-                MINIMR_DEBUGF("parse failed %d\n", res);
+                // MINIMR_DEBUGF("parse failed %d\n", res);
             }
 
             return MINIMR_OK;
@@ -401,6 +461,8 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
     }
 
     if (simple_state == simple_state_announce){
+
+        MINIMR_DEBUGF("minimrsimple: starting announcements\n");
 
         simple_announcement_count = 0;
 
@@ -411,6 +473,10 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
             simple_state = simple_state_stopped;
         } else {
             simple_state = simple_state_responding;
+        }
+
+        if (simple_cfg.state_changed != NULL){
+            simple_cfg.state_changed(simple_state);
         }
 
         return res;
@@ -440,16 +506,15 @@ int32_t minimr_simple_probequery_msg(
     }
 #if MINIMR_RR_TYPE_A_DEFAULT
     // check if
-    else if (minimr_simple_rr_set[0] != NULL){
+    else if (minimr_simple_rr_set[MINIMR_SIMPLE_A_INDEX] != NULL){
         hostname = minimr_simple_rr_a.name;
     }
-#elif MINIMR_RR_TYPE_AAAA_DEFAULT
-    else if (minimr_simple_rr_set[MINIMR_RR_TYPE_A_DEFAULT] != NULL){
+#endif
+#if MINIMR_RR_TYPE_AAAA_DEFAULT
+    else if (minimr_simple_rr_set[MINIMR_SIMPLE_AAAA_INDEX] != NULL){
         hostname = minimr_simple_rr_aaaa.name;
     }
-#else
-#error Hmmm no A/AAAA record defined
-#endif
+    #endif
     else {
         MINIMR_DEBUGF("No A/AAAA record is active (set through set_ips(..)\n");
         return MINIMR_NOT_OK;
@@ -463,19 +528,19 @@ int32_t minimr_simple_probequery_msg(
 #endif
 
 
-#if MINIMR_RR_TYPE_PTR_DEFAULT
-    // do not add PTR record to probequery
-    void * ptr = minimr_simple_rr_set[MINIMR_SIMPLE_PTR_INDEX];
-    minimr_simple_rr_set[MINIMR_SIMPLE_PTR_INDEX] = NULL;
-#endif
+// #if MINIMR_RR_TYPE_PTR_DEFAULT
+//     // do not add PTR record to probequery
+//     void * ptr = minimr_simple_rr_set[MINIMR_SIMPLE_PTR_INDEX];
+//     minimr_simple_rr_set[MINIMR_SIMPLE_PTR_INDEX] = NULL;
+// #endif
 
     int32_t res = minimr_probequery_msg(hostname, servicename, minimr_simple_rr_set, MINIMR_RR_TYPE_DEFAULT_COUNT, outmsg, outmsglen, outmsgmaxlen, request_unicast,  NULL);
 
 
-#if MINIMR_RR_TYPE_PTR_DEFAULT
-    // restore previous state
-    minimr_simple_rr_set[MINIMR_SIMPLE_PTR_INDEX] = ptr;
-#endif
+// #if MINIMR_RR_TYPE_PTR_DEFAULT
+//     // restore previous state
+//     minimr_simple_rr_set[MINIMR_SIMPLE_PTR_INDEX] = ptr;
+// #endif
 
     return res;
 }
@@ -514,7 +579,7 @@ int32_t minimr_simple_query_response_msg(
 }
 
 uint8_t simple_probe_rrhandler(struct minimr_dns_hdr * hdr, minimr_rr_section section, struct minimr_rr_stat * rstat, uint8_t * msg, uint16_t msglen, void * user_data)
-{
+{   
     // in case another (authorative) host is responding to our probequery we already pretty much lost
     if ((hdr->flags[0] & MINIMR_DNS_HDR1_QR) == MINIMR_DNS_HDR1_QR_REPLY){
 
@@ -524,6 +589,10 @@ uint8_t simple_probe_rrhandler(struct minimr_dns_hdr * hdr, minimr_rr_section se
             simple_state = simple_state_stopped;
 
             simple_cfg.reconfiguration_needed();
+
+            if (simple_cfg.state_changed != NULL){
+                simple_cfg.state_changed(simple_state);
+            }
 
             return MINIMR_ABORT;
         }

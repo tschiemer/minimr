@@ -69,6 +69,11 @@ struct minimr_simple_init_st {
     void (*processing_required)();
 
     /**
+     * Optional callback for status changes.
+     */
+    void (*state_changed)(simple_state_t state);
+
+    /**
      * If false (no probing) the records are assumed to be unique. There will be no probing phase.
      * If true (probing) probing_end_timer, restart_in_1sec and reconfiguration_needed are required.
      */
@@ -120,12 +125,12 @@ void minimr_simple_init(struct minimr_simple_init_st * init_st);
  *
  * IMPORTANT Always call with a random (startup) delay uniformly distributed between 0 - 250 ms. (see https://tools.ietf.org/html/rfc6762#section-8.1 )
  */
-void minimr_simple_start();
+void minimr_simple_start(uint16_t ttl);
 
 /**
  * To be called by host when the probing end timer has been triggered.
  */
-void minimr_simple_probing_end_timer_callback(uint8_t * outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen);
+void minimr_simple_probe(uint8_t * outmsg, uint16_t * outmsglen, uint16_t outmsgmaxlen);
 
 /**
  * To be called by host when the announcement timer has been triggered.
