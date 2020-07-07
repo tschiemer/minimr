@@ -444,16 +444,20 @@ int8_t minimr_dns_rr_lexcmp(uint16_t lhsclass, uint16_t lhstype, uint8_t * lhsrd
 
 // __domain__ is assumed uint8_t[__domainlen__]
 #define MINIMR_DNS_RR_WRITE_PTR_BODY(__dst__, __len__, __domain__, __domainlen__) \
+    (__dst__)[(__len__)++] = ((__domainlen__) >> 8) & 0xff; \
+    (__dst__)[(__len__)++] = (__domainlen__) & 0xff; \
     for(uint16_t i = 0; i < (__domainlen__); i++){ (__dst__)[(__len__)+i] = (__domain__)[i]; } \
     (__len__) += __domainlen__;
 
-#define MINIMR_DNS_RR_WRITE_PTR(__dst__, __len__, __name__, __namelen__, __type__, __cacheclass__, __ttl__, __txt__, __txt_len__) \
+#define MINIMR_DNS_RR_WRITE_PTR(__dst__, __len__, __name__, __namelen__, __type__, __cacheclass__, __ttl__, __domain__, __domainlen__) \
     MINIMR_DNS_RR_WRITE_COMMON(__dst__, __len__, __name__, __namelen__, __type__, __cacheclass__, __ttl__) \
-    MINIMR_DNS_RR_WRITE_PTR_BODY(__dst__, __len__, __txt__, __txt_len__)
+    MINIMR_DNS_RR_WRITE_PTR_BODY(__dst__, __len__, __domain__, __domainlen__)
 
 
 // __target__ is assumed uint8_t[__targetlen__]
 #define MINIMR_DNS_RR_WRITE_SRV_BODY(__dst__, __len__, __priority__, __weight__, __port__, __target__, __targetlen__) \
+    (__dst__)[(__len__)++] = ((6 + (__targetlen__)) >> 8) & 0xff; \
+    (__dst__)[(__len__)++] = (6 + (__targetlen__)) & 0xff; \
     (__dst__)[(__len__)++] = ((__priority__) >> 8) & 0xff; \
     (__dst__)[(__len__)++] = (__priority__) & 0xff; \
     (__dst__)[(__len__)++] = ((__weight__) >> 8) & 0xff; \
@@ -470,6 +474,8 @@ int8_t minimr_dns_rr_lexcmp(uint16_t lhsclass, uint16_t lhstype, uint8_t * lhsrd
 
 // __var_txt__ is assumed uint8_t[__txt_len__]
 #define MINIMR_DNS_RR_WRITE_TXT_BODY(__dst__, __len__, __txt__, __txtlen__) \
+    (__dst__)[(__len__)++] = ((__txtlen__) >> 8) & 0xff; \
+    (__dst__)[(__len__)++] = (__txtlen__) & 0xff; \
     for(uint16_t i = 0; i < (__txtlen__); i++){ (__dst__)[(__len__)+i] = (__txt__)[i]; } \
     (__len__) += __txtlen__;
 

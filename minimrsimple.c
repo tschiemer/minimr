@@ -15,6 +15,7 @@ static int32_t simple_rr_handler(minimr_rr_fun type, struct minimr_rr *rr, ...);
 
 #if MINIMR_RR_TYPE_A_DEFAULT
 minimr_rr_a minimr_simple_rr_a = {
+    .cache_class = MINIMR_DNS_CLASS_IN,
     .type = MINIMR_DNS_TYPE_A,
     .ttl = MINIMR_DEFAULT_TTL,
     .handler = simple_rr_handler,
@@ -31,6 +32,7 @@ minimr_rr_a minimr_simple_rr_a = {
 
 #if MINIMR_RR_TYPE_AAAA_DEFAULT
 minimr_rr_aaaa minimr_simple_rr_aaaa = {
+    .cache_class = MINIMR_DNS_CLASS_IN,
     .type = MINIMR_DNS_TYPE_A,
     .ttl = MINIMR_DEFAULT_TTL,
     .handler = simple_rr_handler,
@@ -49,6 +51,7 @@ minimr_rr_aaaa minimr_simple_rr_aaaa = {
 
 #if MINIMR_RR_TYPE_SRV_DEFAULT
 minimr_rr_srv minimr_simple_rr_srv = {
+    .cache_class = MINIMR_DNS_CLASS_IN,
     .type = MINIMR_DNS_TYPE_SRV,
     .ttl = MINIMR_DEFAULT_TTL,
     .handler = simple_rr_handler,
@@ -83,29 +86,36 @@ minimr_rr_srv minimr_simple_rr_srv = {
 
 #if MINIMR_RR_TYPE_TXT_DEFAULT
 minimr_rr_txt minimr_simple_rr_txt = {
+    .cache_class = MINIMR_DNS_CLASS_IN,
     .type = MINIMR_DNS_TYPE_TXT,
     .ttl = MINIMR_DEFAULT_TTL,
     .handler = simple_rr_handler,
 
+#ifdef MINIMR_SIMPLE_SERVICE_NAME
+    .name = MINIMR_SIMPLE_SERVICE_NAME,
+#endif
+
 #ifdef MINIMR_SIMPLE_SERVICE_TXT
     .txt = MINIMR_SIMPLE_SERVICE_TXT
 #endif
+
 };
 #endif
 
 
 #if MINIMR_RR_TYPE_PTR_DEFAULT
 minimr_rr_ptr minimr_simple_rr_ptr = {
-        .type = MINIMR_DNS_TYPE_PTR,
-        .ttl = MINIMR_DEFAULT_TTL,
-        .handler = simple_rr_handler,
+    .cache_class = MINIMR_DNS_CLASS_IN,
+    .type = MINIMR_DNS_TYPE_PTR,
+    .ttl = MINIMR_DEFAULT_TTL,
+    .handler = simple_rr_handler,
 
-#ifdef MINIMR_SIMPLE_SERVICEPTR
-        .name = MINIMR_SIMPLE_SERVICEPTR,
+#ifdef MINIMR_SIMPLE_SERVICE_PTR
+    .name = MINIMR_SIMPLE_SERVICE_PTR,
 #endif
 
 #ifdef MINIMR_SIMPLE_HOSTNAME
-        .domain = MINIMR_SIMPLE_HOSTNAME
+    .domain = MINIMR_SIMPLE_HOSTNAME
 #endif
 
 };
@@ -375,8 +385,8 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
             filters[1].name_length = minimr_simple_rr_srv.name_length;
             nfilters++;
 #elif MINIMR_RR_TYPE_TXT_DEFAULT
-            filters[1].name = minimr_simple_rr_srv.name;
-            filters[1].name_length = minimr_simple_rr_srv.name_length;
+            filters[1].name = minimr_simple_rr_txt.name;
+            filters[1].name_length = minimr_simple_rr_txt.name_length;
             nfilters++;
 #endif
 
