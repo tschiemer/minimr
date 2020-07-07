@@ -1,14 +1,18 @@
 # minimr
 mini mDNS Responder (framework)
 
-The goal of `minimr` is to provide a generic mDNS query handler and response generator framework.
+*minimr* comes with two parts:
+1. a basic mDNS query handler and response generator framework
+2. a simple, ready-made mDNS responder for one A, AAAA, SRV, TXT and PTR record (see `minimrsimple.*`)
 
-`minimr` does NOT provide networking or memory management capabilities which ultimately must be implemented by you. Which also means that there is not functionality to register or unregister services.
+*minimr* does NOT provide networking, timing or memory management capabilities which ultimately must be implemented by you. Which also means that there is no functionality to register or unregister services.
 
-`minimr` provides rather low-level datastructures that can be used - and can easily be customized. If you only require a fixed and small set of services - which is a likely use case `minimr` was intended for: great!
+*minimr* provides rather low-level datastructures and functions that can be used - and can easily be customized. If you only require a fixed and small set of services - which is a likely use case `minimr` was intended for: great!
 If you want a complete (and *elaborate*) implementation you're recommended to have a look at AHAVI or Apple's implementations (see below).
 
-See [minimr-cli-demo](#minimr-cli-demo) to see an example implementation of how to use the framework.
+The minimrsimple-responder can act as logical core which also shows how the basic framework can be made use of.
+
+For a working example also see `examples/mbed-simple` wherein you will find a demo implementation for an echo-service device.
 
 
 ## Other implementations
@@ -23,14 +27,12 @@ See [minimr-cli-demo](#minimr-cli-demo) to see an example implementation of how 
 
 ## Todos
 
-- ~~[Multicast DNS Character Set](https://tools.ietf.org/html/rfc6762#section-16) and in particular utf8 support~~
-- ~~Support name compression for in received queries~~
-- Add startup probing (and query) functionality
-- Timebased limit of responses of the same RR
+?
 
 ## Known Limitations
 
 - Doesn't handle fragmented/truncated/multi-packet messages. (should be ok?)
+- Tiebreaking (of multiple records) in principle is possible but requires architectural complexity which contradicts the simplicity aimed for. Thus it is a feature which is not provided but can be implemented by you.
 
 ## Quick Note on DNS-SD (Service Discovery)
 
@@ -95,18 +97,18 @@ QUERY qtype 12 (PTR) unicast 0 qclass 0 qname (17) ._echo._udp.local
 
 ### minimr-writer
 
-## Examples
+TODO (?)
 
-## Implementation notes
+## Implementation Notes (Framework)
 
 Please refer to [RFC6763](https://tools.ietf.org/html/rfc6762) for implementation details which you are recommended to read anyways.
 
-Some noteworthy/essential extracts where appropriate.
+You are also recommended to have a look at `minimrsimple.*` which shows how to work with the types and functions available.
 
 ### General
 
-IPv4 multicast address: 224.0.0.251
-IPv6 (local-link) multicast address: ff02::fb
+- IPv4 multicast address: 224.0.0.251
+- IPv6 (local-link) multicast address: ff02::fb
 
 >   Multicast DNS...
 >   * uses multicast *yay!*
@@ -138,104 +140,179 @@ IPv6 (local-link) multicast address: ff02::fb
 
 Source: [19.  Summary of Differences between Multicast DNS and Unicast DNS](https://tools.ietf.org/html/rfc6762#section-19)
 
-### Startup / Probing
+### Core
 
+Records essentially consist of a derivation of `struct minimr_rr`, which looks roughly as follows:
 
->[8.1.  Probing](https://tools.ietf.org/html/rfc6762#section-8.1)
->
->   The first startup step is that, for all those resource records that a
->   Multicast DNS responder desires to be unique on the local link, it
->   MUST send a Multicast DNS query asking for those resource records, to
->   see if any of them are already in use.  The primary example of this
->   is a host's address records, which map its unique host name to its
->   unique IPv4 and/or IPv6 addresses.  All probe queries SHOULD be done
->   using the desired resource record name and class (usually class 1,
->   "Internet"), and query type "ANY" (255), to elicit answers for all
->   types of records with that name.  This allows a single question to be
->   used in place of several questions, which is more efficient on the
->   network.  It also allows a host to verify exclusive ownership of a
->   name for all rrtypes, which is desirable in most cases.  It would be
->   confusing, for example, if one host owned the "A" record for
->   "myhost.local.", but a different host owned the "AAAA" record for
->   that name.
->
->   et cetera
+```c
 
-Don't forget to read about tie breaking etc.
+/**
+ * desired function type
+ * @see minimr_rr_fun
+ */
+typedef enum  {
+    minimr_rr_fun_query_respond_to,
+    minimr_rr_fun_query_get_rr,
+    minimr_rr_fun_query_get_authority_rrs,
+    minimr_rr_fun_query_get_extra_rrs,
+    minimr_rr_fun_get_rr,
+    minimr_rr_fun_announce_get_rr,
+    minimr_rr_fun_announce_get_extra_rrs,
+    minimr_rr_fun_lexcmp
+} minimr_rr_fun;
 
-### Announcements and Updates
+typedef int32_t (*minimr_rr_fun_handler)(minimr_rr_fun type, struct minimr_rr *rr, ...);
+
+struct minimr_rr {
+    uint16_t type;
+    uint16_t cache_class;
+    uint32_t ttl;
+
+    MINIMR_TIMESTAMP_FIELD
+    MINIMR_RR_CUSTOM_FIELD
+
+    minimr_rr_fun_handler handler;
+
+    uint16_t name_length;
+
+    uint8_t name[__namelen__];
+}
+```
+
+Any actual record types are defined using precompiler macros `MINIMR_RR_TYPE_BEGIN(__namelen__)` and `MINIMR_RR_TYPE_END()`. Extensions and customizations are possible either using the given `MINIMR_RR_CUSTOM_FIELD` define or by actually defining a type, like so:
+
+```c
+typedef
+MINIMR_RR_TYPE_BEGIN(MY_MAX_NAMELEN)
+  uint16_t priority;
+  uint8_t fancy_field;
+  // etc
+MINIMR_RR_TYPE_END()
+my_custom_rr_t;
+```
+
+By setting a series of max-size defines (also see `examples/mbed-simple/minimropt.h`) the default types `minimr_rr_a`, `minimr_rr_aaaa`, `minimr_rr_srv`, `minimr_rr_txt` and `minimr_srv` will be defined.
+
+Any generation of messages with records requires the listed handler-function (see `minimrsimple.c` for a generic example).
+
+RRNAME/CNAMEs have a specific segmented "normalized" (and internally used!) format - to easily normalize and denormalize names from/to NUL-terminated strings you can use the following functions:
+
+```c
+
+/**
+ * Turns a NUL-terminated string into N segments preceded by a segment * length marker and sets <length> to string length (incl. NUL)
+ */
+void minimr_field_normalize(uint8_t * field, uint16_t * length, uint8_t marker);
+
+/**
+ * Shorthand to normalize an uncompressed NAME
+ */
+#define minimr_name_normalize(field, length)            minimr_field_normalize(field, length, '.')
+
+/**
+ * Shorthand to normalize TXT RDATA
+ * length - 1 because length is not NUL-terminated but specifies RDLENGTH
+ */
+#define minimr_txt_normalize(field, length, marker)     minimr_field_normalize(field, length, marker); \
+                                                            if (length != NULL) (*(length))--;
+
+/**
+ * Reverse function of minimr_field_normalize()
+ * (field must be
+ */
+void minimr_field_denormalize(uint8_t * field, uint16_t length, uint8_t marker);
+
+#define minimr_name_denormalize(field, length)          minimr_field_denormalize(field, length, '.')
+
+#define minimr_txt_denormalize(field, length, marker)   minimr_field_denormalize(field, length, marker)
+
+```
+
+#### Message Parser
+
+If you want to search arriving mDNS messages for specific records, you can use the parser for this:
+
+```c
+/**
+ * Tries to parse given mDNS message calling the (optional) handlers for each encountered query or RR
+ * Can be used to construct a fully featured mDNS responder
+ * @var unimulticast    Was message sent over unicast (0)
+ * @see minimr_query_handler
+ * @see minimr_rr_handler
+ */
+int32_t minimr_parse_msg(
+        uint8_t *msg, uint16_t msglen,
+        minimr_msgtype msgtype,
+        minimr_query_handler qhandler, struct minimr_filter * qfilters, uint16_t nqfilters,
+        minimr_rr_handler rrhandler, struct minimr_filter * rrfilters, uint16_t nrrfilters,
+        void * user_data
+);
+```
+
+#### Message Generator
+
+To generate arbitrary messages you can use the following function, although note, that there are a series of convenience functions for particular message types (ie probe queries, announcements; see below):
+
+```c
+/**
+ * Generates an arbitrary mDNS message according to arguments.
+ *
+ * IMPORTANT NOTE: names are expected to be normalized
+ *
+ * @param queries       can be NULL iff nqueries == 0
+ * @param answer_rrs    can be NULL iff nanswer_rrs == 0
+ * @param auth_rrs      can be NULL iff nauth_rrs == 0
+ * @param extra_rrs     can be NULL iff nextra_rrs == 0
+ * @see struct minimr_query
+ * @see struct minimr_rr
+ * @see
+ */
+int32_t  minimr_make_msg(
+        uint16_t tid, uint8_t flag1, uint8_t flag2,
+        struct minimr_query * queries, uint16_t nqueries,
+        struct minimr_rr ** answer_rrs, uint16_t nanswer_rrs,
+        struct minimr_rr ** auth_rrs, uint16_t nauth_rrs,
+        struct minimr_rr ** extra_rrs, uint16_t nextra_rrs,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+        void * user_data
+);
+```
+
+### Convenience Functions
+
+#### Probing
+
+```c
+/**
+ * Comfort function to generate a probe-query for 1-2 specific (normalized) qnames ANY type and IN class
+ *
+ * @param name1     required NORMALIZED name to query
+ * @param name2     optional NORMALIZED name to query; NULL if not used
+ */
+int32_t minimr_probequery_msg(
+        uint8_t * name1,
+        uint8_t * name2,
+        struct minimr_rr ** proposed_rrs, uint16_t nproposed_rrs,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+        uint8_t request_unicast,
+        void * user_data
+);
+```
+
+#### Announcements and Updates
 
 You can make use of `minimr_announce()` to construct announcement and update messages:
 
 ```c
-uint8_t minimr_announce(
-    struct minimr_dns_rr **records, uint16_t nrecords,
-    uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen
+uint8_t minimr_announce_msg(
+        struct minimr_rr **records, uint16_t nrecords,
+        uint8_t *outmsg, uint16_t *outmsglen, uint16_t outmsgmaxlen,
+        void * user_data
 );
 ```
 
-> [8.3.  Announcing](https://tools.ietf.org/html/rfc6762#section-8.3)
->
->   The second startup step is that the Multicast DNS responder MUST send
->   an unsolicited Multicast DNS response containing, in the Answer
->   Section, all of its newly registered resource records (both shared
->   records, and unique records that have completed the probing step).
->   If there are too many resource records to fit in a single packet,
->   multiple packets should be used.
->
->   In the case of shared records (e.g., the PTR records used by DNS-
->   Based Service Discovery [RFC6763]), the records are simply placed as
->   is into the Answer Section of the DNS response.
->
->   In the case of records that have been verified to be unique in the
->   previous step, they are placed into the Answer Section of the DNS
->   response with the most significant bit of the rrclass set to one.
->   The most significant bit of the rrclass for a record in the Answer
->   Section of a response message is the Multicast DNS cache-flush bit
->   and is discussed in more detail below in Section 10.2, "Announcements
->   to Flush Outdated Cache Entries".
->
->   The Multicast DNS responder MUST send at least two unsolicited
->   responses, one second apart.  To provide increased robustness against
->   packet loss, a responder MAY send up to eight unsolicited responses,
->   provided that the interval between unsolicited responses increases by
->   at least a factor of two with every response sent.
->
->   A Multicast DNS responder MUST NOT send announcements in the absence
->   of information that its network connectivity may have changed in some
->   relevant way.  In particular, a Multicast DNS responder MUST NOT send
->   regular periodic announcements as a matter of course.
->
->   Whenever a Multicast DNS responder receives any Multicast DNS
->   response (solicited or otherwise) containing a conflicting resource
->   record, the conflict MUST be resolved as described in Section 9,
->   "Conflict Resolution".
->
->[8.4.  Updating](https://tools.ietf.org/html/rfc6762#section-8.4)
->
->   At any time, if the rdata of any of a host's Multicast DNS records
->   changes, the host MUST repeat the Announcing step described above to
->   update neighboring caches.  For example, if any of a host's IP
->   addresses change, it MUST re-announce those address records.  The
->   host does not need to repeat the Probing step because it has already
->   established unique ownership of that name.
->
->   In the case of shared records, a host MUST send a "goodbye"
->   announcement with RR TTL zero (see Section 10.1, "Goodbye Packets")
->   for the old rdata, to cause it to be deleted from peer caches, before
->   announcing the new rdata.  In the case of unique records, a host
->   SHOULD omit the "goodbye" announcement, since the cache-flush bit on
->   the newly announced records will cause old rdata to be flushed from
->   peer caches anyway.
->
->   A host may update the contents of any of its records at any time,
->   though a host SHOULD NOT update records more frequently than ten
->   times per minute.  Frequent rapid updates impose a burden on the
->   network.  If a host has information to disseminate which changes more
->   frequently than ten times per minute, then it may be more appropriate
->   to design a protocol for that specific purpose.
 
-### Service Termination / Goodbye Messages
+#### Service Termination / Goodbye Messages
 
 You can make use of `minimr_terminate()` to construct announcement and update messages:
 
@@ -246,32 +323,24 @@ uint8_t minimr_terminate(
 );
 ```
 
-*Note: This is actually just a convenience function that sets all TTLs to 0 and calls `minimr_announce()`*
+*IMPORTANT NOTE: This is actually just a convenience function that sets all TTLs to 0 and calls `minimr_announce()` (remember to set the TTL again to a valid value when republished)*
 
->[10.1.  Goodbye Packets](https://tools.ietf.org/html/rfc6762#section-10.1)
->
->   In the case where a host knows that certain resource record data is
->   about to become invalid (for example, when the host is undergoing a
->   clean shutdown), the host SHOULD send an unsolicited Multicast DNS
->   response packet, giving the same resource record name, rrtype,
->   rrclass, and rdata, but an RR TTL of zero.  This has the effect of
->   updating the TTL stored in neighboring hosts' cache entries to zero,
->   causing that cache entry to be promptly deleted.
->
->   Queriers receiving a Multicast DNS response with a TTL of zero SHOULD
->   NOT immediately delete the record from the cache, but instead record
->   a TTL of 1 and then delete the record one second later.  In the case
->   of multiple Multicast DNS responders on the network described in
->   Section 6.6 above, if one of the responders shuts down and
->   incorrectly sends goodbye packets for its records, it gives the other
->   cooperating responders one second to send out their own response to
->   "rescue" the records before they expire and are deleted.
 
-### Name Compression
+### Other
 
-`minimr` does not force you to use [name compression](https://tools.ietf.org/html/rfc6762#section-18.14) and does not automatically compress data provided by you.
+#### Name Compression
+
+*minimr* does not force you to use [name compression](https://tools.ietf.org/html/rfc6762#section-18.14) and does not automatically compress data provided by you, but can handle compressed names of incoming messages - and if so desired extract compressed names; also see:
+
+```c
+/**
+ * Copies possibly compressed name to given destination and returns length of NUL-terminated string
+ */
+int32_t minimr_name_uncompress(uint8_t * uncompressed_name, uint16_t maxlen, uint16_t namepos, uint8_t * msg, uint8_t msglen);
+```
 
 If you want to use name compression in responses, please implement this yourself - record callbacks/handlers essentially are provided with complete messages when writing responses, if they can remember which names were used where, this should be a piece of cake ;) (more or less).
+
 
 
 ## MIT License
