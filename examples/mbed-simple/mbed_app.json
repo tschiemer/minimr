@@ -1,0 +1,8 @@
+{
+    "target_overrides": {
+        "*": {
+            "lwip.dhcp-timeout": 5,
+            "lwip.ipv6-enabled": 1
+        }
+    }
+}
