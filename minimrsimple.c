@@ -337,7 +337,7 @@ void minimr_simple_probe(uint8_t * outmsg, uint16_t * outmsglen, uint16_t outmsg
     MINIMR_DEBUGF("minimrsimple: probing\n");
 
     simple_probe_count++;
-    simple_cfg.probing_end_timer(250);
+    simple_cfg.probing_end_timer(MINIMR_DNS_PROBE_WAIT_MSEC);
 
     // MINIMR_DEBUGF("reprobe!\n");
     minimr_simple_probequery_msg(outmsg, outmsglen, outmsgmaxlen, 1);
@@ -391,7 +391,7 @@ int32_t minimr_simple_fsm(uint8_t *msg, uint16_t msglen, uint8_t *outmsg, uint16
             simple_state = simple_state_await_probe_response;
 
             simple_probe_count = 1;
-            simple_cfg.probing_end_timer(250);
+            simple_cfg.probing_end_timer(MINIMR_DNS_PROBE_WAIT_MSEC);
         }
 
         if (simple_cfg.state_changed != NULL){
