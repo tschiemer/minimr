@@ -133,7 +133,7 @@ uint8_t minimr_extract_query_stat(struct minimr_query_stat * stat, uint8_t * msg
 
     *pos = p;
 
-    MINIMR_DEBUGF("qstat\n type %d unicast %d class %d name_offset %d\n", stat->type, (stat->unicast_class & MINIMR_DNS_QUNICAST) == MINIMR_DNS_QUNICAST, stat->unicast_class & MINIMR_DNS_QCLASS, stat->name_offset);
+    // MINIMR_DEBUGF("qstat\n type %d unicast %d class %d name_offset %d\n", stat->type, (stat->unicast_class & MINIMR_DNS_QUNICAST) == MINIMR_DNS_QUNICAST, stat->unicast_class & MINIMR_DNS_QCLASS, stat->name_offset);
 
     return MINIMR_OK;
 }
@@ -144,7 +144,6 @@ uint8_t minimr_extract_rr_stat(struct minimr_rr_stat * stat, uint8_t * msg, uint
 
     // minlen = QNAME(2) RRTYPE(2) CACHE/RRCLASS(2) TTL(4) RDLENGTH(2) + RDLENGTH
     if (p + 11 >= msglen){
-        MINIMR_DEBUGF("s 1\n");
         return MINIMR_NOT_OK;
     }
 
@@ -169,13 +168,11 @@ uint8_t minimr_extract_rr_stat(struct minimr_rr_stat * stat, uint8_t * msg, uint
     // did not go beyond msg
     // read at least 1 bytes?
     if (p >= msglen || p == *pos ){
-        MINIMR_DEBUGF("s 1 *pos %d p %d msglen %d\n", *pos, p, msglen);
         return MINIMR_NOT_OK;
     }
 
     // minlen = RRTYPE(2) CACHE/RRCLASS(2) TTL(4) RDLENGTH(2) + RDLENGTH
     if (p + 10 >= msglen){
-        MINIMR_DEBUGF("s 2");
         return MINIMR_NOT_OK;
     }
 
@@ -197,8 +194,6 @@ uint8_t minimr_extract_rr_stat(struct minimr_rr_stat * stat, uint8_t * msg, uint
     stat->dlength |= msg[p++];
 
     if (p + stat->dlength > msglen){
-
-        MINIMR_DEBUGF("s 3 p %d dlen %d msglen %d\n", p, stat->dlength, msglen);
         return MINIMR_NOT_OK;
     }
 
@@ -645,26 +640,30 @@ int32_t  minimr_make_msg(
                 return MINIMR_DNS_HDR2_RCODE_SERVAIL;
             }
             outmsg[outlen++] = queries[i].name[j];
-        }
 
-        if (outlen + 4 > outmsgmaxlen){
+            // MINIMR_DEBUGF("%02x ", queries[i].name[j]);
+        }
+        // MINIMR_DEBUGF("\n");
+
+        if (outlen + 5 > outmsgmaxlen){
             return MINIMR_DNS_HDR2_RCODE_SERVAIL;
         }
 
+        // name termination
+        outmsg[outlen++] = '\0';
 
         MINIMR_DNS_Q_WRITE_TYPE( outmsg, outlen, queries[i].type);
         MINIMR_DNS_Q_WRITE_CLASS( outmsg, outlen, queries[i].unicast_class );
-        
     }
 
-    MINIMR_DEBUGF("added %d queries rr\n", nqueries);
+    MINIMR_DEBUGF("added %d queries\n", nqueries);
 
     uint16_t final_nanswers = 0; // needed because there might be NULL entries
 
     // add all normal answers RRs
     for(uint16_t i = 0; i < nanswers; i++){
 
-        if (answerrr[i] != NULL){
+        if (answerrr[i] == NULL){
             continue;
         }
 
@@ -687,7 +686,7 @@ int32_t  minimr_make_msg(
     // add all normal answers RRs
     for(uint16_t i = 0; i < nauthrr; i++){
 
-        if (authrr[i] != NULL){
+        if (authrr[i] == NULL){
             continue;
         }
 
@@ -709,7 +708,7 @@ int32_t  minimr_make_msg(
     // add all normal answers RRs
     for(uint16_t i = 0; i < nextrarr; i++){
 
-        if (extrarr[i] != NULL){
+        if (extrarr[i] == NULL){
             continue;
         }
 
@@ -768,16 +767,17 @@ int32_t minimr_probequery_msg(
 
     struct minimr_query queries[2];
 
-    queries[0].type = MINIMR_DNS_TYPE_ANY;
     queries[0].unicast_class = MINIMR_DNS_CLASS_IN | (request_unicast ? MINIMR_DNS_QUNICAST : 0);
+    queries[0].type = MINIMR_DNS_TYPE_ANY;
     queries[0].name = name1;
 
     uint16_t nqueries = 1;
 
     if (name2 != NULL){
-        queries[1].type = MINIMR_DNS_TYPE_ANY;
         queries[1].unicast_class = MINIMR_DNS_CLASS_IN | (request_unicast ? MINIMR_DNS_QUNICAST : 0);
+        queries[1].type = MINIMR_DNS_TYPE_ANY;
         queries[1].name = name2;
+        nqueries++;
     }
 
     return minimr_make_msg(
@@ -950,9 +950,9 @@ int32_t minimr_query_response_msg(
     MINIMR_ASSERT(outmsglen != NULL);
     MINIMR_ASSERT(outmsgmaxlen > MINIMR_DNS_HDR_SIZE);
 
-    MINIMR_DEBUGF("\nnew msg %p (len %d)\n", msg, msglen);
+    // MINIMR_DEBUGF("\nnew msg %p (len %d)\n", msg, msglen);
 
-    MINIMR_DEBUGF("msglen check\n");
+    // MINIMR_DEBUGF("msglen check\n");
 
     // ignore messages that are not long enough to even have a complete header
     if (msglen < MINIMR_DNS_HDR_SIZE){
@@ -964,7 +964,7 @@ int32_t minimr_query_response_msg(
     // read header info
     minimr_dns_hdr_read(&hdr, msg);
 
-    MINIMR_DEBUGF("is standard query?\n");
+    // MINIMR_DEBUGF("is standard query?\n");
 
     // not a (standard) query? ignore
     // or no questions? nothing to do!
@@ -979,7 +979,7 @@ int32_t minimr_query_response_msg(
     uint16_t pos = MINIMR_DNS_HDR_SIZE;
     uint16_t nq = 0;
 
-    MINIMR_DEBUGF("checking %d questions\n", hdr.nqueries);
+    // MINIMR_DEBUGF("checking %d questions\n", hdr.nqueries);
 
     // note all relevant questions for us
     // stored in stats as 0 - nq
@@ -997,7 +997,7 @@ int32_t minimr_query_response_msg(
             return MINIMR_DNS_HDR2_RCODE_FORMERR;
         }
 
-        MINIMR_DEBUGF("comparing question %d with %d records\n", iq,nrecords);
+        // MINIMR_DEBUGF("comparing question %d with %d records\n", iq,nrecords);
 
         for(uint16_t ir = 0; ir < nrecords; ir++){
 
@@ -1030,14 +1030,14 @@ int32_t minimr_query_response_msg(
 
             nq++;
 
-            MINIMR_DEBUGF("question %d matches record %d\n", iq, ir);
+            // MINIMR_DEBUGF("question %d matches record %d\n", iq, ir);
 
             break;
         }
 
     }
 
-    MINIMR_DEBUGF("got %d relevant questions\n", nq);
+    // MINIMR_DEBUGF("got %d relevant questions\n", nq);
 
     // no questions we need to answer
     if (nq == 0){
@@ -1047,7 +1047,7 @@ int32_t minimr_query_response_msg(
     // init to false;
     uint8_t unicast_req = 0;
 
-    MINIMR_DEBUGF("checking known answers\n");
+    // MINIMR_DEBUGF("checking known answers\n");
 
     // note how many questions we actually have to answer
     // (can change after checking the known answers)
@@ -1114,7 +1114,7 @@ int32_t minimr_query_response_msg(
         }
     }
 
-    MINIMR_DEBUGF("remaining questions %d\n", remaining_nq);
+    // MINIMR_DEBUGF("remaining questions %d\n", remaining_nq);
 
     // oh, all our records are known already! time for a coffee
     if (remaining_nq == 0){
@@ -1127,7 +1127,7 @@ int32_t minimr_query_response_msg(
         return MINIMR_DNS_HDR2_RCODE_SERVAIL;
     }
 
-    MINIMR_DEBUGF("unicast requested %d\n", unicast_req);
+    // MINIMR_DEBUGF("unicast requested %d\n", unicast_req);
     if (unicast_requested != NULL){
         *unicast_requested = unicast_req;
     }
@@ -1137,7 +1137,7 @@ int32_t minimr_query_response_msg(
 
     uint16_t nanswers = 0;
 
-    MINIMR_DEBUGF("outlen %d\n", outlen);
+    // MINIMR_DEBUGF("outlen %d\n", outlen);
 
     // add all normal answers RRs
     for(uint16_t iq = 0; iq < nq; iq++){
@@ -1161,7 +1161,7 @@ int32_t minimr_query_response_msg(
         nanswers += nrr;
     }
 
-    MINIMR_DEBUGF("added %d answer rr\n", nanswers);
+    // MINIMR_DEBUGF("added %d answer rr\n", nanswers);
 
     // add all authority RRs
     uint16_t nauthrr = 0;
@@ -1186,7 +1186,7 @@ int32_t minimr_query_response_msg(
         nauthrr += nrr;
     }
 
-    MINIMR_DEBUGF("added %d authority rr\n", nauthrr);
+    // MINIMR_DEBUGF("added %d authority rr\n", nauthrr);
 
     // add all additional RRs
     uint16_t nextrarr = 0;
@@ -1211,7 +1211,7 @@ int32_t minimr_query_response_msg(
         nextrarr += nrr;
     }
 
-    MINIMR_DEBUGF("added %d extra rr\n", nextrarr);
+    // MINIMR_DEBUGF("added %d extra rr\n", nextrarr);
 
     // prepare outheader and out sanity check
     struct minimr_dns_hdr outhdr;
