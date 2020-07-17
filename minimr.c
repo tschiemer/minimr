@@ -1021,6 +1021,9 @@ int32_t minimr_query_response_msg(
             return MINIMR_DNS_HDR2_RCODE_FORMERR;
         }
 
+        // reset relevant stat
+        qstats[nq].relevant = 0;
+
         // MINIMR_DEBUGF("comparing question %d with %d records\n", iq,nrecords);
 
         for(uint16_t ir = 0; ir < nrecords; ir++){
@@ -1056,7 +1059,19 @@ int32_t minimr_query_response_msg(
 
             // MINIMR_DEBUGF("question %d matches record %d\n", iq, ir);
 
-            break;
+            // TODO test multiple answers for same question
+
+            // if used up all qstats, abort
+            if (nq > nqstats){
+                break;
+            }
+
+            // duplicate qstat to test for matching of multiple records
+            qstats[nq].type = qstats[nq-1].type;
+            qstats[nq].unicast_class = qstats[nq-1].unicast_class;
+            qstats[nq].name_offset = qstats[nq-1].name_offset;
+            qstats[nq].relevant = 0;
+
         }
 
     }
