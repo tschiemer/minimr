@@ -1,9 +1,9 @@
 # minimr
-mini mDNS Responder (framework)
+mini mDNS Responder (framework) - platform independent and ARM friendly
 
 *minimr* comes with two parts:
 1. a basic mDNS query handler and response generator framework
-2. a simple, ready-made mDNS responder for one A, AAAA, SRV, TXT and PTR record (see `minimrsimple.*`)
+2. a simple, ready-made mDNS responder for one A, AAAA, SRV, TXT and PTR record (see `minimrsimple.*` and `examples/mbed-simple`)
 
 *minimr* does NOT provide networking, timing or memory management capabilities which ultimately must be implemented by you. Which also means that there is no functionality to register or unregister services.
 
@@ -14,20 +14,31 @@ The minimrsimple-responder can act as logical core which also shows how the basi
 
 For a working example also see `examples/mbed-simple` wherein you will find a demo implementation for an echo-service device.
 
+Key-features:
+- Only processes mDNS messages and in particular does NOT use
+   - any form of networking (or memory) abstraction
+   - dynamic memory allocation
+- Provides features usable for both a server and client but no high-level API (except for the simple ready-made responder)
+- Low-level but friendly control of (customizable) datastructures
 
-## Other implementations
 
-- [AVAHI](https://www.avahi.org/)
-- [Apple Bonjour](https://developer.apple.com/bonjour/)
-- [zcip](http://zeroconf.sourceforge.net/)
-- [lwIP](http://www.nongnu.org/lwip/2_0_x/group__mdns.html): on top of stack
-- [mbed's nanostack](https://github.com/ARMmbed/mbed-os/blob/master/features/nanostack/sal-stack-nanostack/nanostack/ns_mdns_api.h): on top of stack??
-- [XMOS's lib_xctp](https://github.com/xmos/lib_xtcp/blob/master/lib_xtcp/src/mdns/): for their
+## Other (interesting) implementations
+
+- [AVAHI](https://www.avahi.org/) (Linux)
+- [Apple Bonjour](https://developer.apple.com/bonjour/) (macOS, Windows, Linux, embeddable(?)): Service Discovery for Linux using mDNS/DNS-SD -- compatible with Bonjour
+- [zcip](http://zeroconf.sourceforge.net/) (Linux)
+- [lwIP](http://www.nongnu.org/lwip/2_0_x/group__mdns.html) (*ARM*, macOS, Windows, Linux):
+- [mbed's nanostack](https://github.com/ARMmbed/mbed-os/blob/master/features/nanostack/sal-stack-nanostack/nanostack/ns_mdns_api.h) (ARM..?): on top of stack?
+- [mjanssons's mDNS/DNS-SD library](https://github.com/mjansson/mdns): a header only cross-platform mDNS and DNS-DS library in C (with a clear concept of sockets)
+- [microdns](https://github.com/videolabs/libmicrodns): microdns is an mDNS library, focused on being simple and cross-platform (with a clear concept of sockets (platform callbacks))
+- [TinySVCmDNS (fork)](https://github.com/philippe44/TinySVCmDNS) (macOS, Windows, Linux, ARM): tiny MDNS responder implementation for publishing services
+- [XMOS's lib_xctp](https://github.com/xmos/lib_xtcp/blob/master/lib_xtcp/src/mdns/): for their XCORE platform
+- [mdnsd](https://github.com/kernelconcepts/mdnsd): embeddable Multicast DNS Daemon (with KC enhancements)
 
 
 ## Todos
 
-?
+- [ ] evolve simple responder to a more dynamic version
 
 ## Known Limitations
 
